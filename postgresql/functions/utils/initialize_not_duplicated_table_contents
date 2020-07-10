@@ -1,0 +1,25 @@
+CREATE OR REPLACE FUNCTION public.initialize_not_duplicated_table_contents(
+    arg_table_name TEXT,
+    arg_table_pkey TEXT,
+    arg_column_name TEXT,
+    arg_default_value TEXT)
+    RETURNS VOID
+
+AS
+    $$
+    DECLARE
+        v_record RECORD;
+        loop_counter INTEGER := 1;
+    BEGIN
+        FOR v_record IN
+            EXECUTE 'SELECT * FROM ' || arg_table_name
+        LOOP
+            EXECUTE 'UPDATE ' || arg_table_name ||
+                    ' SET ' || arg_column_name || ' = ' || arg_default_value || loop_counter ||
+                    ' WHERE ' || arg_table_pkey || ' = ' || v_record || '.' || arg_table_pkey;
+
+            loop_counter := loop_counter + 1;
+        END LOOP;
+    END;
+    $$
+LANGUAGE 'plpgsql';

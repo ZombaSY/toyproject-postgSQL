@@ -1,0 +1,53 @@
+create or replace function insert_experiment(arg_api_key character, arg_account_id character, arg_workspace_name character, arg_project_name character, arg_experiment_name character)
+    returns TABLE(experiment_id integer, project_id integer)
+    language plpgsql
+as
+$$
+DECLARE
+	select_query integer;
+	temp_experiment_id integer;
+	var_account_index INTEGER;
+    v_random_string TEXT;
+    is_available_access_key BOOL := FALSE;
+BEGIN
+	SELECT DISTINCT public.project.id, public.account.id FROM public.account
+		LEFT JOIN public.api_key ON public.api_key.account_id = arg_account_id
+		LEFT JOIN public.workspace ON public.workspace.name = arg_workspace_name
+		LEFT JOIN public.project ON public.project.belonged_workspace_id = public.workspace.id
+		WHERE public.api_key.api_key = arg_api_key AND
+		      public.project.name = arg_project_name AND
+		      public.account.account_id = arg_account_id
+	    INTO select_query, var_account_index;
+
+
+	IF select_query is NULL THEN
+		RAISE WARNING 'Project does not found!!!';
+	ELSE
+
+	    -- Generate unique access key --
+	    WHILE is_available_access_key IS NOT TRUE
+        LOOP
+	        v_random_string := (SELECT * FROM public.generate_random_string(16));
+            IF v_random_string IN
+                (SELECT access_key FROM public.experiment) THEN
+                RAISE NOTICE 'access key is already in DB. Generate again.';
+            ELSE
+                is_available_access_key := TRUE;
+            END IF;
+        END LOOP;
+
+		INSERT INTO public.experiment (name, belonged_project_id, creator, access_key)
+		VALUES (
+		        arg_experiment_name,
+		        select_query,
+		        var_account_index,
+		        v_random_string)
+		RETURNING experiment.id INTO temp_experiment_id;
+
+		project_id := select_query;
+		experiment_id := temp_experiment_id;
+
+		RETURN NEXT;
+	END IF;
+END;
+$$;

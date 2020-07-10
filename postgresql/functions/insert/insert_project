@@ -21,6 +21,7 @@ BEGIN
 
 	IF is_available_account IS TRUE THEN
 		check_workspace := (SELECT * FROM public.is_available_ref_account_workspace(arg_account_index, arg_belonged_workspace_id));
+
 		IF check_workspace IS TRUE THEN
 			BEGIN
 				INSERT INTO public.project(
