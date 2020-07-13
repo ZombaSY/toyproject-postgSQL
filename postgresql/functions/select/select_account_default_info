@@ -1,0 +1,26 @@
+CREATE OR REPLACE FUNCTION public.logincheck(
+    arg_account_email TEXT)
+    RETURNS TABLE(
+        id INTEGER,
+        account_pwd CHARACTER VARYING,
+        account_name CHARACTER VARYING,
+        default_workspace_key TEXT)
+
+AS
+    $$
+    BEGIN
+        RETURN QUERY (
+            SELECT  public.account.id,
+                public.account.account_pwd,
+                public.account.account_name,
+                public.workspace.access_key
+                    FROM public.account
+                INNER JOIN public.workspace ON public.workspace.id = public.account.default_workspace
+                WHERE account_id = arg_account_email);
+    END;
+    $$
+LANGUAGE 'plpgsql';
+
+DROP FUNCTION logincheck(text)
+
+SELECT * FROM public.logincheck('tjxhwl@gmail.com')

@@ -1,26 +1,21 @@
-CREATE OR REPLACE FUNCTION public.select_workspace(
-	arg_account_index integer)
-    RETURNS TABLE(workspace_id integer, workspace_name character varying)
-    LANGUAGE 'plpgsql'
-
-    COST 100
-    VOLATILE
-    ROWS 1000
-
-AS $BODY$
+CREATE OR REPLACE FUNCTION getworkspaceinfosession(arg_account_index INTEGER)
+    RETURNS TABLE(workspace_id_key TEXT, workspace_name CHARACTER VARYING)
+    language plpgsql
+as
+$$
 DECLARE
-	check_query boolean := false;
-
+	check_query BOOLEAN := FALSE;
+	return_table RECORD;
 BEGIN
-	check_query := (select is_available_accountsession from public.is_available_accountsession(arg_account_index));
-	IF check_query is false then
-		workspace_id := -1;
-		return next;
+	check_query := (SELECT is_available_accountsession from public.is_available_accountsession(arg_account_index));
+	IF check_query IS FALSE THEN
+		workspace_id_key := '-1';
+		RETURN NEXT;
 	ELSE
-		return query (select public.workspace.id, public.workspace.name from public.account
-					  	inner join public.ref_account_workspace on public.account.id = public.ref_account_workspace.id_account
-					 	inner join public.workspace on public.ref_account_workspace.id_workspace =public.workspace.id
-					  		where public.account.id = arg_account_index);
+		RETURN QUERY (SELECT public.workspace.access_key, public.workspace.name FROM public.account
+					  	INNER JOIN public.ref_account_workspace on public.account.id = public.ref_account_workspace.id_account
+					 	INNER JOIN public.workspace ON public.ref_account_workspace.id_workspace =public.workspace.id
+					  	WHERE public.account.id = arg_account_index);
 
 	/*
 	-- worksapce index, 이름, visibility, 사용자 권한 --
@@ -50,4 +45,5 @@ BEGIN
 	*/
 
 	END IF;
-END;$BODY$;
+END;
+$$;

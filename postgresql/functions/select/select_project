@@ -2,20 +2,20 @@ CREATE OR REPLACE FUNCTION public.select_project_in_workspace(
 	arg_account_index integer,
 	arg_belonged_workspace_index integer)
     RETURNS TABLE(
-        tb_id integer,
-        tb_name character varying,
-        tb_description character varying,
+        tb_id TEXT,
+        tb_name CHARACTER VARYING,
+        tb_description CHARACTER VARYING,
         tb_creator_email TEXT,
         tb_admin_email TEXT,
-        tb_created_date timestamp without time zone,
-        tb_modified_date timestamp without time zone,
-        tb_visibility smallint,
-        tb_user_name_array text,
-        tb_user_email_array text,
-        tb_user_permission_array text,
-        tb_user_count integer,
-        tb_experiment_count integer,
-        tb_report_count integer)
+        tb_created_date TIMESTAMP WITHOUT TIME ZONE,
+        tb_modified_date TIMESTAMP WITHOUT TIME ZONE,
+        tb_visibility SMALLINT,
+        tb_user_name_array TEXT,
+        tb_user_email_array TEXT,
+        tb_user_permission_array TEXT,
+        tb_user_count INTEGER,
+        tb_experiment_count INTEGER,
+        tb_report_count INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -32,14 +32,14 @@ DECLARE
     return_code INTEGER;
 BEGIN
 	FOR r IN (SELECT * FROM public.project
-			  	where belonged_workspace_id =arg_belonged_workspace_index)
+			  	WHERE belonged_workspace_id =arg_belonged_workspace_index)
 	LOOP
 		SELECT * FROM public.select_account_info_from_project(r.id, r.visibility, arg_account_index)
             INTO return_code, v_account_name, v_account_email, v_account_permission, v_account_counter;
 
 		-- If got an information from above function, fill the return table --
 		IF return_code = 0 THEN
-            tb_id := r.id;
+            tb_id := r.access_key;
             tb_name := r.name;
             tb_description := r.description;
             tb_created_date :=r.created_date;
@@ -65,3 +65,6 @@ BEGIN
 	END LOOP;
 END;
 $BODY$;
+
+SELECT * FROM public.select_project_in_workspace(8,4)
+

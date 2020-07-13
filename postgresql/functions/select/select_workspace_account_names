@@ -1,7 +1,9 @@
-CREATE OR REPLACE FUNCTION public.select_workspace_account_names(
-	arg_account_index integer,
-	arg_workspace_index integer)
-    RETURNS TABLE(tb_code integer, tb_account_name character varying)
+CREATE OR REPLACE FUNCTION public.get_workspace_account_names(
+	arg_account_index INTEGER,
+	arg_workspace_index_key TEXT)
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_account_name CHARACTER VARYING)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -10,11 +12,13 @@ CREATE OR REPLACE FUNCTION public.select_workspace_account_names(
 
 AS $BODY$
 DECLARE
-	check_query boolean := false;
+	check_query BOOLEAN := FALSE;
 	v_account_names CHARACTER VARYING [];
-
+    v_workspace_index INTEGER;
 BEGIN
-	check_query := (SELECT * FROM public.is_available_ref_account_workspace(arg_account_index, arg_workspace_index));
+    v_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_workspace_index_key);
+	check_query := (SELECT * FROM public.is_available_ref_account_workspace(arg_account_index, v_workspace_index));
 
 	IF check_query IS FALSE THEN
 		tb_code := -100;
@@ -22,7 +26,7 @@ BEGIN
 	ELSE
 		v_account_names := ARRAY(SELECT account_name FROM public.ref_account_workspace
 				INNER JOIN public.account ON public.account.id = public.ref_account_workspace.id_account
-				WHERE public.ref_account_workspace.id_workspace = arg_workspace_index);
+				WHERE public.ref_account_workspace.id_workspace = v_workspace_index);
 
 		tb_Account_name = ARRAY_TO_STRING(v_account_names, ',');
 		tb_code = 0;

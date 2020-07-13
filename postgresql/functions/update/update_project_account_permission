@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION public.update_project_account_permission(
 	arg_account_index integer,
-	arg_project_index integer,
+	arg_project_index_key TEXT,
 	arg_alter_account_email text,
 	arg_alter_account_permission integer)
     RETURNS integer
@@ -11,15 +11,18 @@ CREATE OR REPLACE FUNCTION public.update_project_account_permission(
 
 AS $BODY$
 DECLARE
+    v_project_index INTEGER;
 	v_user_permission INTEGER;
 	v_alter_account_index INTEGER;
     v_administrator_id INTEGER;
 	return_code INTEGER;
 BEGIN
+    v_project_index :=
+        (SELECT id FROM public.project WHERE public.project.access_key = arg_project_index_key);
 
 	-- Check account's permission --
 	v_user_permission := (SELECT user_permission FROM public.ref_account_project
-						  	WHERE id_account = arg_account_index AND id_project = arg_project_index);
+						  	WHERE id_account = arg_account_index AND id_project = v_project_index);
 
 	-- Get account index by email --
 	BEGIN
@@ -34,7 +37,7 @@ BEGIN
 		v_administrator_id :=
 			(SELECT administrator_id FROM public.project
 				INNER JOIN public.ref_account_project ON public.ref_account_project.id_project = public.project.id
-				WHERE public.ref_account_project.id_account = arg_account_index AND public.ref_account_project.id_project = arg_project_index);
+				WHERE public.ref_account_project.id_account = arg_account_index AND public.ref_account_project.id_project = v_project_index);
 
 		IF v_alter_account_index = v_administrator_id THEN
 			return_code := -101;    -- Cannot change admin's permission --
@@ -43,7 +46,7 @@ BEGIN
 		ELSE
             UPDATE public.ref_account_project
                 SET user_permission = arg_alter_account_permission
-                WHERE id_account = v_alter_account_index AND id_project = arg_project_index;
+                WHERE id_account = v_alter_account_index AND id_project = v_project_index;
 
             return_code := 0;
             RETURN return_code;

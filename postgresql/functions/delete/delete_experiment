@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION public.delete_experiment(
 	arg_account_index INTEGER,
-	arg_workspace_index INTEGER,
+	arg_workspace_index_key TEXT,
 	arg_experiment_indices BIGINT[],
 	ignore_permission BOOLEAN)
     RETURNS TABLE(
@@ -20,8 +20,10 @@ DECLARE
     v_deleted_blob_sizes BIGINT := 0;
     v_loop_counter INTEGER := 0;
     check_query INTEGER;
+    v_workspace_index INTEGER;
 BEGIN
-
+    v_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_workspace_index_key);
     ------------------------- Called from external function -------------------------
     IF ignore_permission = FALSE THEN
 
@@ -39,7 +41,7 @@ BEGIN
             -- Get names to delete azure cloud blobs --
             v_container_name :=
                 (SELECT cloud_container_name FROM public.azure_cloud_container
-                WHERE workspace_id = arg_workspace_index);
+                WHERE workspace_id = v_workspace_index);
 
             -- Delete blob referencing deleted experiment --
             FOR v_record IN
@@ -84,7 +86,7 @@ BEGIN
          -- Get names to delete azure cloud blobs --
         v_container_name :=
             (SELECT cloud_container_name FROM public.azure_cloud_container
-            WHERE workspace_id = arg_workspace_index);
+            WHERE workspace_id = v_workspace_index);
 
         -- Delete blob referencing deleted experiment --
         FOR v_record IN

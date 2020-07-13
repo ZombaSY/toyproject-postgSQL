@@ -1,29 +1,60 @@
-CREATE OR REPLACE FUNCTION public.select_experiment(
-	arg_account_index integer,
-	arg_belonged_project_id integer)
-    RETURNS TABLE(tb_experiment_ids bigint, tb_experiment_names character varying, tb_experiment_logs text, tb_experiment_output_log text, tb_experiment_system_metrics text, tb_experiment_hyper_parameter text, tb_experiment_requirements text, tb_experiment_code_blob_id bigint, tb_experiment_image_blob text, tb_experiment_model_blob text, tb_experiment_creator bigint, tb_experiment_created_dated timestamp without time zone)
+CREATE OR REPLACE FUNCTION public.getexperimentsession(
+	arg_account_index INTEGER,
+	arg_belonged_project_id TEXT)
+    RETURNS TABLE(
+        tb_experiment_id_key TEXT,
+        tb_experiment_names CHARACTER VARYING,
+        tb_experiment_logs TEXT,
+        tb_experiment_output_log TEXT,
+        tb_experiment_system_metrics TEXT,
+        tb_experiment_hyper_parameter TEXT,
+        tb_experiment_requirements TEXT,
+        tb_experiment_code_blob_id BIGINT,
+        tb_experiment_image_blob TEXT,
+        tb_experiment_model_blob TEXT,
+        tb_experiment_creator BIGINT,
+        tb_experiment_created_dated TIMESTAMP WITHOUT TIME ZONE)
     LANGUAGE 'plpgsql'
 
     COST 100
     VOLATILE
     ROWS 1000
 
-AS $BODY$BEGIN
-	RETURN QUERY
-		SELECT DISTINCT public.experiment.id,
-						public.experiment.name,
-						public.experiment.log,
-						array_to_string(public.experiment.output_log, E'\n', '*') ,
-						array_to_string(public.experiment.system_metrics, E'\n', '*'),
-						public.experiment.hyper_parameter,
-						public.experiment.requirements,
-						public.experiment.code_blob_id,
-						array_to_string(public.experiment.image_blob_id, E'\n', '*'),
-						array_to_string(public.experiment.model_blob_id, E'\n', '*'),
-						public.experiment.creator,
-						public.experiment.created_date
-							FROM public.account, public.workspace
-			LEFT JOIN public.experiment ON public.experiment.belonged_project_id = arg_belonged_project_id
-				WHERE public.account.id = arg_account_index
-					ORDER BY public.experiment.id DESC;
+AS $BODY$
+DECLARE
+    v_project_id INTEGER;
+BEGIN
+
+    SELECT id_project FROM public.ref_account_project
+        INNER JOIN public.project ON public.project.id = public.ref_account_project.id_project
+        WHERE id_account = arg_account_index AND public.project.access_key = arg_belonged_project_id
+        INTO v_project_id;
+
+    IF v_project_id IS NOT NULL THEN
+        RETURN QUERY
+            SELECT DISTINCT public.experiment.access_key,
+                public.experiment.name,
+				public.experiment.log,
+				array_to_string(public.experiment.output_log, E'\n', '*') ,
+				array_to_string(public.experiment.system_metrics, E'\n', '*'),
+				public.experiment.hyper_parameter,
+				public.experiment.requirements,
+				public.experiment.code_blob_id,
+				array_to_string(public.experiment.image_blob_id, E'\n', '*'),
+				array_to_string(public.experiment.model_blob_id, E'\n', '*'),
+				public.experiment.creator,
+				public.experiment.created_date
+					FROM public.experiment
+                LEFT JOIN public.project ON public.experiment.belonged_project_id = public.project.id
+                WHERE public.project.id = v_project_id
+                ORDER BY public.experiment.created_date DESC;
+    ELSE
+        RETURN NEXT;
+    END IF;
 END;$BODY$;
+
+SELECT * FROM public.getexperimentsession(8,'aaaaaaaaaa34')
+
+SELECT id_account FROM public.ref_account_project
+        INNER JOIN public.project ON public.project.id = public.ref_account_project.id_project
+        WHERE id_account = 8 AND public.project.access_key = 'aaaaaaaaaa34'

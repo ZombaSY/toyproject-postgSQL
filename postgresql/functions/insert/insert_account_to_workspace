@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION public.insert_account_to_workspace(
 	arg_account_id integer,
 	arg_invited_account_email TEXT,
-	arg_workspace_id integer,
+	arg_workspace_id_key TEXT,
 	arg_account_permission integer)
     RETURNS integer
     LANGUAGE 'plpgsql'
@@ -12,16 +12,19 @@ CREATE OR REPLACE FUNCTION public.insert_account_to_workspace(
 AS $BODY$
     /*
      To Do
-     1. Check account's api key
+     1. Check account's api key to verify license
      */
 DECLARE
     var_account_permission INTEGER;
     var_invited_account_index INTEGER;
 	return_code INTEGER;
+    v_workspace_index INTEGER;
 BEGIN
+    v_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_workspace_id_key);
     var_account_permission :=
         (SELECT account_permission FROM public.ref_account_workspace
-            WHERE id_account = arg_account_id AND id_workspace = arg_workspace_id);
+            WHERE id_account = arg_account_id AND id_workspace = v_workspace_index);
     IF var_account_permission = 1 THEN
         var_invited_account_index :=
             (SELECT id FROM public.account
@@ -30,12 +33,12 @@ BEGIN
         IF var_invited_account_index IS NOT NULL THEN   -- Has email in account table --
             BEGIN
                 INSERT INTO public.ref_account_workspace
-                    VALUES(var_invited_account_index, arg_workspace_id, arg_account_permission);
+                    VALUES(var_invited_account_index, v_workspace_index, arg_account_permission);
 
                 -- Plus the workspace personal --
                 UPDATE public.azure_cloud_container
                     SET workspace_personnal = workspace_personnal + 1
-                    WHERE workspace_id = arg_workspace_id;
+                    WHERE workspace_id = v_workspace_index;
                 EXCEPTION
                     WHEN SQLSTATE '23503' THEN
                         return_code := -100; -- No account_index or workspace_index in DB --
@@ -58,3 +61,5 @@ BEGIN
 	RETURN return_code;
 END;
 $BODY$;
+
+

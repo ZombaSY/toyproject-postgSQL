@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION public.update_account_default_workspace(
 	arg_account_index integer,
-	arg_current_workspace_index integer,
-	arg_changing_workspace_index integer)
+	arg_current_workspace_index_key TEXT,
+	arg_changing_workspace_index_key TEXT)
     RETURNS integer
     LANGUAGE 'plpgsql'
 
@@ -13,14 +13,21 @@ DECLARE
 	return_code INTEGER;
     v_object INTEGER;
     v_check_query INTEGER;
+    v_current_workspace_index INTEGER;
+    v_changing_workspace_index INTEGER;
 BEGIN
+    v_current_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_current_workspace_index_key);
+    v_changing_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_changing_workspace_index_key);
+
     v_check_query :=
         (SELECT id_account FROM public.ref_account_workspace
-            WHERE id_account = arg_account_index AND id_workspace = arg_changing_workspace_index);
+            WHERE id_account = arg_account_index AND id_workspace = v_changing_workspace_index);
     IF v_check_query IS NOT NULL THEN
         UPDATE public.account
-            SET default_workspace = arg_changing_workspace_index
-            WHERE id = arg_account_index AND default_workspace = arg_current_workspace_index
+            SET default_workspace = v_changing_workspace_index
+            WHERE id = arg_account_index AND default_workspace = v_current_workspace_index
             RETURNING id INTO v_object;
 
         IF v_object IS NULL THEN

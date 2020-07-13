@@ -1,10 +1,10 @@
 CREATE OR REPLACE FUNCTION public.insert_azure_blob(
-	arg_cloud_path character,
-	arg_container_name character,
-	arg_input_file_size bigint,
-	arg_file_type character,
-	arg_experiment_id bigint)
-    RETURNS integer
+	arg_cloud_path CHARACTER,
+	arg_container_name CHARACTER,
+	arg_input_file_size BIGINT,
+	arg_file_type CHARACTER,
+	arg_experiment_id CHARACTER)
+    RETURNS INTEGER
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -16,6 +16,7 @@ DECLARE
     var_workspace_personal INTEGER;
 	var_storage_usage BIGINT;
 	var_blob_id BIGINT;
+    var_experiment_id BIGINT;
 	code INTEGER;
 BEGIN
 	SELECT storage_usage, workspace_personnal FROM public.azure_cloud_container
@@ -28,8 +29,11 @@ BEGIN
 		code := -200;
 		RETURN code;
 	ELSE
+
+	    -- Get experiment id by access key --
+	    var_experiment_id := (SELECT id FROM public.experiment WHERE access_key = arg_experiment_id);
 		INSERT INTO public.azure_cloud_blob(cloud_path, container_name, blob_size, blob_type, belonged_experiment_id)
-			VALUES (arg_cloud_path, arg_container_name, arg_input_file_size, arg_file_type, arg_experiment_id);
+			VALUES (arg_cloud_path, arg_container_name, arg_input_file_size, arg_file_type, var_experiment_id);
 
 		IF arg_file_type = 'Source Code' THEN
 			var_blob_id := (SELECT id FROM public.azure_cloud_blob

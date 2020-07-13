@@ -1,11 +1,18 @@
-create or replace function insert_experiment(arg_api_key character, arg_account_id character, arg_workspace_name character, arg_project_name character, arg_experiment_name character)
-    returns TABLE(experiment_id integer, project_id integer)
-    language plpgsql
+CREATE OR REPLACE FUNCTION createexperiment(
+    arg_api_key CHARACTER,
+    arg_account_id CHARACTER,
+    arg_workspace_name CHARACTER,
+    arg_project_name CHARACTER,
+    arg_experiment_name CHARACTER)
+    RETURNS TABLE(
+        experiment_id_key CHARACTER,
+        project_id INTEGER)
+    LANGUAGE plpgsql
 as
 $$
 DECLARE
-	select_query integer;
-	temp_experiment_id integer;
+	select_query INTEGER;
+	temp_experiment_id INTEGER;
 	var_account_index INTEGER;
     v_random_string TEXT;
     is_available_access_key BOOL := FALSE;
@@ -20,7 +27,7 @@ BEGIN
 	    INTO select_query, var_account_index;
 
 
-	IF select_query is NULL THEN
+	IF select_query IS NULL THEN
 		RAISE WARNING 'Project does not found!!!';
 	ELSE
 
@@ -45,9 +52,12 @@ BEGIN
 		RETURNING experiment.id INTO temp_experiment_id;
 
 		project_id := select_query;
-		experiment_id := temp_experiment_id;
+		experiment_id_key := v_random_string;
 
 		RETURN NEXT;
 	END IF;
 END;
 $$;
+
+
+SELECT * FROM public.project

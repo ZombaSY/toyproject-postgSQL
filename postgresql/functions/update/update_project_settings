@@ -1,10 +1,10 @@
 CREATE OR REPLACE FUNCTION public.update_project_settings(
-	arg_account_index integer,
-	arg_project_index integer,
-	arg_project_visibility integer,
-	arg_project_name text,
-	arg_project_description text)
-    RETURNS integer
+	arg_account_index INTEGER,
+	arg_project_index_key TEXT,
+	arg_project_visibility INTEGER,
+	arg_project_name TEXT,
+	arg_project_description TEXT)
+    RETURNS INTEGER
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -13,19 +13,22 @@ CREATE OR REPLACE FUNCTION public.update_project_settings(
 AS $BODY$
 DECLARE
 	v_user_permission INTEGER;
+    v_project_index INTEGER;
     v_user_state INTEGER;
 	return_code INTEGER;
 BEGIN
 	-- Check account's permission --
-	v_user_permission := (SELECT user_permission FROM public.ref_account_project
-						  	WHERE id_account = arg_account_index AND id_project = arg_project_index);
+    SELECT user_permission, public.project.id FROM public.ref_account_project
+        INNER JOIN public.project ON public.project.id = public.ref_account_project.id_project
+        WHERE id_account = arg_account_index AND access_key = arg_project_index_key
+	    INTO v_user_permission, v_project_index;
 
 	IF v_user_permission = 1 THEN	-- Is Maintainer --
 
 		-- Update project settings --
 		UPDATE public.project
 			SET visibility = arg_project_visibility, name = arg_project_name, description = arg_project_description
-			WHERE public.project.id = arg_project_index;
+			WHERE public.project.id = v_project_index;
 
 		CASE arg_project_visibility
 			WHEN 0 THEN
@@ -40,7 +43,7 @@ BEGIN
 		-- Change user_state who already belonged to projects --
 		UPDATE public.ref_account_project
 			SET user_state = v_user_state
-			WHERE id_project = arg_project_index;
+			WHERE id_project = v_project_index;
 
 		return_code := 0;
 		RETURN return_code;

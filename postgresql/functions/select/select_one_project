@@ -1,19 +1,24 @@
-CREATE OR REPLACE FUNCTION public.select_one_project(
+CREATE OR REPLACE FUNCTION public.get_one_project(
 	arg_account_index integer,
-	arg_project_index integer)
-    RETURNS TABLE(tb_code integer, tb_name character varying, tb_belonged_container_name character varying)
+	arg_project_index_key TEXT)
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_name CHARACTER VARYING,
+        tb_belonged_container_name CHARACTER VARYING)
     LANGUAGE 'plpgsql'
 
     COST 100
     VOLATILE
-    ROWS 1000
+    ROWS 100
 
 AS $BODY$
 DECLARE
 	is_available boolean;
+    v_project_index INTEGER;
 BEGIN
-
-	is_available := (SELECT * FROM public.is_available_ref_account_project(arg_account_index, arg_project_index));
+    v_project_index :=
+        (SELECT id FROM public.project WHERE access_key = arg_project_index_key);
+	is_available := (SELECT * FROM public.is_available_ref_account_project(arg_account_index, v_project_index));
 
 	IF is_available THEN
 		-- Get Project info to the Returning TABLE --
@@ -22,7 +27,7 @@ BEGIN
 					FROM public.project
 				INNER JOIN public.azure_cloud_container
 					ON public.project.belonged_workspace_id = public.azure_cloud_container.workspace_id
-				WHERE public.project.id = arg_project_index
+				WHERE public.project.id = v_project_index
 				INTO 	tb_name,
 						tb_belonged_container_name;
 
@@ -34,3 +39,6 @@ BEGIN
 	END IF;
 END;
 $BODY$;
+
+
+SELECT * FROM public.get_one_project(8, 'aaaaaaaaaa34')

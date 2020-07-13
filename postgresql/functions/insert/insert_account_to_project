@@ -1,9 +1,9 @@
-CREATE OR REPLACE FUNCTION public.insert_account_to_project(
-	arg_account_index integer,
-	arg_invite_index integer,
-	arg_project_id integer,
-	arg_workspace_id integer)
-    RETURNS integer
+CREATE OR REPLACE FUNCTION public.inviteproject(
+	arg_account_index INTEGER,
+	arg_invite_index INTEGER,
+	arg_project_id TEXT,
+	arg_workspace_id_key TEXT)
+    RETURNS INTEGER
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -11,17 +11,25 @@ CREATE OR REPLACE FUNCTION public.insert_account_to_project(
 
 AS $BODY$
 DECLARE
- check_query INTEGER:= -1;
- r RECORD;
+    check_query INTEGER:= -1;
+    v_project_index INTEGER;
+    r RECORD;
+    v_workspace_index INTEGER;
 BEGIN
-	check_query :=(select count(*) from public.ref_account_workspace where id_workspace = arg_workspace_id and (id_account = arg_account_index or id_account = arg_invite_index));
-	-- ????? check query 가 뭘 찾는거죠 ????? --
+    v_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_workspace_id_key);
+	check_query :=
+	    (SELECT count(*) FROM public.ref_account_workspace WHERE id_workspace = v_workspace_index AND (id_account = arg_account_index OR id_account = arg_invite_index));
+
 	IF check_query = 2 THEN
+	    v_project_index :=
+	        (SELECT id FROM public.project
+	            WHERE access_key = arg_project_id);
 		FOR r IN(select * from public.ref_account_project
-					   where id_account = arg_account_index and id_project = arg_project_id)
+					   where id_account = arg_account_index and id_project = v_project_index)
 		LOOP
 		IF r.user_permission = 1 THEN
-			Insert into ref_account_project(id_account, id_project, user_state) values (arg_invite_index,arg_project_id,r.user_state);
+			INSERT INTO ref_account_project(id_account, id_project, user_state) VALUES (arg_invite_index,v_project_index,r.user_state);
 			RETURN 0;
 		ELSE
 			RETURN 510;

@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION public.delete_project(
 	arg_account_index INTEGER,
-	arg_project_index INTEGER,
+	arg_project_index_key TEXT,
 	ignore_permission BOOLEAN)
     RETURNS TABLE(
         tb_code INTEGER,
@@ -16,30 +16,32 @@ DECLARE
     v_record RECORD;
     v_workspace_id INTEGER;
     v_project_name TEXT;
+    v_project_index INTEGER;
     v_container_name TEXT;
     v_cloud_paths TEXT;
     v_deleted_blob_sizes BIGINT := 0;
     v_loop_counter INTEGER := 0;
     check_query INTEGER;
 BEGIN
-
+    v_project_index :=
+        (SELECT id FROM public.project WHERE access_key = arg_project_index_key);
     ------------------------- Called from external function -------------------------
     IF ignore_permission = FALSE THEN
 
         -- Check has permission --
         check_query :=
             (SELECT administrator_id FROM public.project
-                WHERE public.project.administrator_id = arg_account_index AND id = arg_project_index);
+                WHERE public.project.administrator_id = arg_account_index AND id = v_project_index);
 
         IF check_query IS NOT NULL THEN
 
             -- Release account from project --
             DELETE FROM public.ref_account_project
-                WHERE id_project = arg_project_index;
+                WHERE id_project = v_project_index;
 
             -- Delete Project --
             DELETE FROM public.project
-                WHERE id = arg_project_index
+                WHERE id = v_project_index
                 RETURNING belonged_workspace_id, name INTO v_workspace_id, v_project_name;
 
             IF v_workspace_id IS NULL THEN
@@ -88,11 +90,11 @@ BEGIN
 
         -- Release account from project --
         DELETE FROM public.ref_account_project
-            WHERE id_project = arg_project_index;
+            WHERE id_project = v_project_index;
 
         -- Delete Project --
         DELETE FROM public.project
-            WHERE id = arg_project_index
+            WHERE id = v_project_index
             RETURNING belonged_workspace_id, name INTO v_workspace_id, v_project_name;
 
         v_container_name :=
