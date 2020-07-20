@@ -17,6 +17,9 @@ DECLARE
     is_available_access_key BOOL;
     v_random_string TEXT;
 BEGIN
+
+    -- TODO: check api_key to confirm creator's license
+
 	select_query := (SELECT id FROM public.account
 					 	WHERE id = arg_account_index);
 	IF select_query is NULL THEN

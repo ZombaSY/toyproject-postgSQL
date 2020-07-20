@@ -1,4 +1,4 @@
--CREATE OR REPLACE FUNCTION public.is_available_apikey(
+CREATE OR REPLACE FUNCTION public.is_available_apikey(
 	arg_api_key character,
 	arg_account_id character)
     RETURNS boolean

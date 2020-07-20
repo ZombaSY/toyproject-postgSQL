@@ -1,0 +1,55 @@
+CREATE OR REPLACE FUNCTION public.leave_account_from_workspace(
+	arg_account_index INTEGER,
+	arg_workspace_index_key TEXT)
+    RETURNS integer
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+	return_code INTEGER;
+    v_workspace_index INTEGER;
+BEGIN
+    v_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_workspace_index_key);
+
+    BEGIN
+        -- Delete account from reference table --
+        DELETE FROM public.ref_account_workspace
+            WHERE id_account = arg_account_index AND id_workspace = v_workspace_index
+                RETURNING id_account INTO return_code;
+
+        IF return_code IS NULL THEN
+            return_code := 1; -- No row Deleted --
+            RETURN return_code;
+        END IF;
+
+        -- Reduce workspace personal in container --
+        UPDATE public.azure_cloud_container
+            SET workspace_personnal = workspace_personnal - 1
+            WHERE workspace_id = v_workspace_index;
+
+        -- Change kicked account's default workspace --
+        -- Default workspace is randomly chosen in belonged workspace --
+        UPDATE public.account
+            SET default_workspace = (
+                SELECT id_workspace FROM public.ref_account_workspace
+                    WHERE id_account = arg_account_index
+                    LIMIT 1)
+            WHERE id = arg_account_index;
+
+        EXCEPTION
+            WHEN SQLSTATE 'P0003' THEN
+                DELETE FROM public.ref_account_workspace
+                    WHERE id_account = arg_account_index AND id_workspace = v_workspace_index;
+                return_code := -1; -- More than one same row in table --
+                return return_code;
+    END;
+
+    return_code := 0;
+    RETURN return_code;
+
+END;
+$BODY$;

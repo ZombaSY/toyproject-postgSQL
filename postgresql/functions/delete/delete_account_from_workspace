@@ -17,21 +17,23 @@ DECLARE
 BEGIN
     v_workspace_index :=
         (SELECT id FROM public.workspace WHERE access_key = arg_workspace_index_key);
-	-- Check kicker's permission --
-	v_user_permission := (SELECT account_permission FROM public.ref_account_workspace
-						  	WHERE id_account = arg_kicker_account_index AND id_workspace = v_workspace_index);
 
-	BEGIN
+    BEGIN
 		v_kicked_account_index := (SELECT * FROM public.select_account_index(arg_kicked_account_email));
 		EXCEPTION
 			WHEN SQLSTATE 'P0001' THEN
 				RETURN -101;
 	END;
 
+	-- Check kicker's permission --
+	SELECT account_permission FROM public.ref_account_workspace
+        WHERE id_account = arg_kicker_account_index AND id_workspace = v_workspace_index
+        INTO v_user_permission;
+
 	IF (v_user_permission = 1) THEN	-- Is admin
 
-	-- Delete account from reference table --
 		BEGIN
+		    -- Delete account from reference table --
 			DELETE FROM public.ref_account_workspace
 				WHERE id_account = v_kicked_account_index AND id_workspace = v_workspace_index
 					RETURNING id_account INTO return_code;
@@ -40,6 +42,14 @@ BEGIN
 		    UPDATE public.azure_cloud_container
 		        SET workspace_personnal = workspace_personnal - 1
 		        WHERE workspace_id = v_workspace_index;
+
+		    -- Change kicked account's default workspace --
+		    UPDATE public.account
+		        SET default_workspace = (
+		            SELECT * FROM public.ref_account_workspace
+                        WHERE id_account = v_kicked_account_index
+                        LIMIT 1)
+		        WHERE id = v_kicked_account_index;
 
 			EXCEPTION
 				WHEN SQLSTATE 'P0003' THEN

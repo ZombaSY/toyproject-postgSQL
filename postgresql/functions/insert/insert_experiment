@@ -6,28 +6,33 @@ CREATE OR REPLACE FUNCTION createexperiment(
     arg_experiment_name CHARACTER)
     RETURNS TABLE(
         experiment_id_key CHARACTER,
-        project_id INTEGER)
+        project_id_key TEXT)
     LANGUAGE plpgsql
 as
 $$
 DECLARE
-	select_query INTEGER;
+	var_project_id INTEGER;
+    var_project_access_key TEXT;
 	temp_experiment_id INTEGER;
 	var_account_index INTEGER;
     v_random_string TEXT;
     is_available_access_key BOOL := FALSE;
 BEGIN
-	SELECT DISTINCT public.project.id, public.account.id FROM public.account
-		LEFT JOIN public.api_key ON public.api_key.account_id = arg_account_id
+
+	SELECT DISTINCT public.project.id,
+                    public.account.id,
+                    public.project.access_key
+                        FROM public.account
+		LEFT JOIN public.api_key ON public.api_key.account_id = public.account.account_id
 		LEFT JOIN public.workspace ON public.workspace.name = arg_workspace_name
 		LEFT JOIN public.project ON public.project.belonged_workspace_id = public.workspace.id
 		WHERE public.api_key.api_key = arg_api_key AND
 		      public.project.name = arg_project_name AND
 		      public.account.account_id = arg_account_id
-	    INTO select_query, var_account_index;
+	    INTO var_project_id, var_account_index, var_project_access_key;
 
 
-	IF select_query IS NULL THEN
+	IF var_project_id IS NULL THEN
 		RAISE WARNING 'Project does not found!!!';
 	ELSE
 
@@ -43,21 +48,19 @@ BEGIN
             END IF;
         END LOOP;
 
+	    -- Create experiment --
 		INSERT INTO public.experiment (name, belonged_project_id, creator, access_key)
 		VALUES (
 		        arg_experiment_name,
-		        select_query,
+		        var_project_id,
 		        var_account_index,
 		        v_random_string)
 		RETURNING experiment.id INTO temp_experiment_id;
 
-		project_id := select_query;
+		project_id_key := var_project_access_key;
 		experiment_id_key := v_random_string;
 
 		RETURN NEXT;
 	END IF;
 END;
 $$;
-
-
-SELECT * FROM public.project
