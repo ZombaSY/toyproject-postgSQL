@@ -46,7 +46,7 @@ BEGIN
 		    -- Change kicked account's default workspace --
 		    UPDATE public.account
 		        SET default_workspace = (
-		            SELECT * FROM public.ref_account_workspace
+		            SELECT id_account FROM public.ref_account_workspace
                         WHERE id_account = v_kicked_account_index
                         LIMIT 1)
 		        WHERE id = v_kicked_account_index;

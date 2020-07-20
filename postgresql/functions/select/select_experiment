@@ -13,7 +13,8 @@ CREATE OR REPLACE FUNCTION public.getexperimentsession(
         tb_experiment_image_blob TEXT,
         tb_experiment_model_blob TEXT,
         tb_experiment_creator BIGINT,
-        tb_experiment_created_dated TIMESTAMP WITHOUT TIME ZONE)
+        tb_experiment_created_dated TIMESTAMP WITHOUT TIME ZONE,
+        tb_experiment_status SMALLINT)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -43,7 +44,8 @@ BEGIN
 				array_to_string(public.experiment.image_blob_id, E'\n', '*'),
 				array_to_string(public.experiment.model_blob_id, E'\n', '*'),
 				public.experiment.creator,
-				public.experiment.created_date
+				public.experiment.created_date,
+                public.experiment.experiment_state
 					FROM public.experiment
                 LEFT JOIN public.project ON public.experiment.belonged_project_id = public.project.id
                 WHERE public.project.id = v_project_id
@@ -53,8 +55,6 @@ BEGIN
     END IF;
 END;$BODY$;
 
-SELECT * FROM public.getexperimentsession(8,'aaaaaaaaaa34')
+SELECT * FROM public.getexperimentsession(8,'aaaaaaaaaa34');
 
-SELECT id_account FROM public.ref_account_project
-        INNER JOIN public.project ON public.project.id = public.ref_account_project.id_project
-        WHERE id_account = 8 AND public.project.access_key = 'aaaaaaaaaa34'
+SELECT * FROM public.experiment;

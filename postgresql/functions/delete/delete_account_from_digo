@@ -115,5 +115,3 @@ BEGIN
 	END IF;
 END;
 $BODY$;
-
-SELECT * FROM public.account

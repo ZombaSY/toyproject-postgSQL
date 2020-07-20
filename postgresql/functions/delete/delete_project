@@ -79,10 +79,8 @@ BEGIN
             tb_code := 0;
             tb_cloud_path := v_cloud_paths;
             tb_container_name := v_container_name;
-            RETURN NEXT;
         ELSE
             tb_code := -100;    -- Permission denied --
-            RETURN NEXT;
         END IF;
 
     ------------------------- Called from internal function -------------------------
@@ -127,7 +125,8 @@ BEGIN
         tb_code := 0;
         tb_cloud_path := v_cloud_paths;
         tb_container_name := v_container_name;
-        RETURN NEXT;
     END IF;
+
+    RETURN NEXT;
 END;
 $BODY$;
