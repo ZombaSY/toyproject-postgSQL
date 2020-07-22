@@ -4,12 +4,13 @@ CREATE OR REPLACE FUNCTION createworkspace(
     arg_visibility INTEGER,
     arg_cloud_container_name CHARACTER VARYING,
     arg_account_permission INTEGER)
-    RETURNS INTEGER
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_workspace_index_key TEXT)
     language plpgsql
 as
 $$
 DECLARE
-	check_query INTEGER:= -1;
 	cur_id_workspace INTEGER;
 	cur_id_account INTEGER;
 	select_query INTEGER;
@@ -22,9 +23,10 @@ BEGIN
 
 	select_query := (SELECT id FROM public.account
 					 	WHERE id = arg_account_index);
+
 	IF select_query is NULL THEN
-		check_query := 123;
-		return check_query;
+		tb_code := 123;
+		RETURN NEXT;
 	ELSE
 
 		check_name := (SELECT name FROM public.workspace
@@ -50,7 +52,7 @@ BEGIN
             -- Create workspace --
 			INSERT INTO public.workspace(name,visibility, admin_id, access_key)
 				VALUES (arg_workspace_name, arg_visibility, arg_account_index, v_random_string)
-				RETURNING id INTO cur_id_workspace;
+				RETURNING id, access_key INTO cur_id_workspace, tb_workspace_index_key;
 
             -- Update default workspace when created new workspace --
 			UPDATE public.account set default_workspace = cur_id_workspace
@@ -64,13 +66,12 @@ BEGIN
             -- Create azure cloud container in DB --
 			INSERT INTO public.azure_cloud_container(cloud_container_name, workspace_id)
 				VALUES (arg_cloud_container_name, cur_id_workspace);
-			check_query := 0;
+			tb_code := 0;
 		ELSE
-			check_query := 170;
+			tb_code := 170;
 		END IF;
-		return check_query;
+		RETURN NEXT;
 	END IF;
 END;
 $$;
 
-SELECT * FROM public.ref_account_workspace;

@@ -24,7 +24,9 @@ BEGIN
     v_check_query :=
         (SELECT id_account FROM public.ref_account_workspace
             WHERE id_account = arg_account_index AND id_workspace = v_changing_workspace_index);
+
     IF v_check_query IS NOT NULL THEN
+
         UPDATE public.account
             SET default_workspace = v_changing_workspace_index
             WHERE id = arg_account_index AND default_workspace = v_current_workspace_index
@@ -44,3 +46,49 @@ BEGIN
 
 END
 $BODY$;
+
+
+------------------ Overload --------------------
+CREATE OR REPLACE FUNCTION public.update_account_default_workspace(
+	arg_account_index INTEGER)
+    RETURNS INTEGER
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+    return_code INTEGER := 0;
+    v_remained_workspace INTEGER;
+BEGIN
+    v_remained_workspace :=
+        (SELECT id_account FROM public.ref_account_workspace
+                WHERE id_account = arg_account_index
+                LIMIT 1);
+    IF v_remained_workspace IS NULL THEN
+        return_code = -105;
+    ELSE
+        UPDATE public.account
+            SET default_workspace = v_remained_workspace
+            WHERE id = arg_account_index;
+    END IF;
+
+    RETURN return_code;
+END
+$BODY$;
+
+
+SELECT * FROM public.account;
+SELECT * FROM public.email
+
+SELECT * FROM public.ref_account_workspace
+    WHERE id_account = 66;
+
+UPDATE public.account
+    SET default_workspace = NULL
+    WHERE id = 66;
+
+SELECT * FROM public.update_account_default_workspace(66);
+
+SELECT * FROM public.workspace;

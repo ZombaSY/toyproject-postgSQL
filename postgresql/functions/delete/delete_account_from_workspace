@@ -12,7 +12,7 @@ AS $BODY$
 DECLARE
 	v_user_permission INTEGER;
 	v_kicked_account_index INTEGER;
-	return_code INTEGER;
+	return_code INTEGER := 0;
     v_workspace_index INTEGER;
 BEGIN
     v_workspace_index :=
@@ -44,12 +44,8 @@ BEGIN
 		        WHERE workspace_id = v_workspace_index;
 
 		    -- Change kicked account's default workspace --
-		    UPDATE public.account
-		        SET default_workspace = (
-		            SELECT id_account FROM public.ref_account_workspace
-                        WHERE id_account = v_kicked_account_index
-                        LIMIT 1)
-		        WHERE id = v_kicked_account_index;
+		    return_code :=
+		        (SELECT * FROM public.update_account_default_workspace(v_kicked_account_index));
 
 			EXCEPTION
 				WHEN SQLSTATE 'P0003' THEN
@@ -61,10 +57,6 @@ BEGIN
 
 		IF return_code IS NULL THEN
 			return_code := 1; -- No row Deleted --
-			RETURN return_code;
-		ELSE
-			return_code := 0;
-			RETURN return_code;
 		END IF;
 	ELSE
 		return_code := -100;	-- Kicker has no permission --

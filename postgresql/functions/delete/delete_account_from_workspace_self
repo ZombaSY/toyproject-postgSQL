@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION public.leave_account_from_workspace(
 
 AS $BODY$
 DECLARE
-	return_code INTEGER;
+	return_code INTEGER := 0;
     v_workspace_index INTEGER;
 BEGIN
     v_workspace_index :=
@@ -32,13 +32,9 @@ BEGIN
             WHERE workspace_id = v_workspace_index;
 
         -- Change kicked account's default workspace --
-        -- Default workspace is randomly chosen in belonged workspace --
-        UPDATE public.account
-            SET default_workspace = (
-                SELECT id_workspace FROM public.ref_account_workspace
-                    WHERE id_account = arg_account_index
-                    LIMIT 1)
-            WHERE id = arg_account_index;
+        return_code :=
+            (SELECT * FROM public.update_account_default_workspace(arg_account_index));
+
 
         EXCEPTION
             WHEN SQLSTATE 'P0003' THEN
@@ -48,8 +44,8 @@ BEGIN
                 return return_code;
     END;
 
-    return_code := 0;
     RETURN return_code;
 
 END;
 $BODY$;
+

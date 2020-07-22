@@ -16,6 +16,8 @@ DECLARE
     v_container_name TEXT;
     is_admin INTEGER;
 BEGIN
+    tb_code := 0;
+
     v_workspace_index :=
         (SELECT id FROM public.workspace WHERE access_key = arg_workspace_index_key);
 
@@ -46,16 +48,11 @@ BEGIN
             DELETE FROM public.azure_cloud_blob
                 WHERE container_name = v_container_name;
 
-            -- Change account's default workspace --
-		    UPDATE public.account
-		        SET default_workspace =
-		            (SELECT id_account FROM public.ref_account_workspace
-                        WHERE id_account = arg_account_index
-                        LIMIT 1)
-		        WHERE id = arg_account_index;
+            -- Change kicked account's default workspace --
+            tb_code :=
+                (SELECT * FROM public.update_account_default_workspace(arg_account_index));
 
             tb_container_name := v_container_name;
-		    tb_code := 0;
         ELSE
             tb_code := -100;
         END IF;
@@ -80,19 +77,14 @@ BEGIN
         DELETE FROM public.azure_cloud_blob
             WHERE container_name = v_container_name;
 
-        -- Change account's default workspace --
-        UPDATE public.account
-            SET default_workspace =
-                (SELECT id_account FROM public.ref_account_workspace
-                    WHERE id_account = arg_account_index
-                    LIMIT 1)
-            WHERE id = arg_account_index;
+        -- Change kicked account's default workspace --
+        tb_code :=
+            (SELECT * FROM public.update_account_default_workspace(arg_account_index));
 
         tb_container_name := v_container_name;
-        tb_code := 0;
-
     END IF;
 
     RETURN NEXT;
 END;
 $BODY$;
+
