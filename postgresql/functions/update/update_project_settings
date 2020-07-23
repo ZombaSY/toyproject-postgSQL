@@ -25,10 +25,17 @@ BEGIN
 
 	IF v_user_permission = 1 THEN	-- Is Maintainer --
 
-		-- Update project settings --
-		UPDATE public.project
-			SET visibility = arg_project_visibility, name = arg_project_name, description = arg_project_description
-			WHERE public.project.id = v_project_index;
+        BEGIN
+            -- Update project settings --
+            UPDATE public.project
+                SET visibility = arg_project_visibility, name = arg_project_name, description = arg_project_description
+                WHERE public.project.id = v_project_index;
+
+            EXCEPTION
+                WHEN SQLSTATE '23505' THEN
+                    return_code := 100;
+                    RETURN return_code;
+        END;
 
 		CASE arg_project_visibility
 			WHEN 0 THEN
@@ -53,3 +60,10 @@ BEGIN
 	END IF;
 END;
 $BODY$;
+
+SELECT * FROM public.update_project_settings(
+    1,
+    'yqmosvsohh47s41s',
+    0,
+    '1',
+    'boom');

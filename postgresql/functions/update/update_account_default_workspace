@@ -77,18 +77,3 @@ BEGIN
     RETURN return_code;
 END
 $BODY$;
-
-
-SELECT * FROM public.account;
-SELECT * FROM public.email
-
-SELECT * FROM public.ref_account_workspace
-    WHERE id_account = 66;
-
-UPDATE public.account
-    SET default_workspace = NULL
-    WHERE id = 66;
-
-SELECT * FROM public.update_account_default_workspace(66);
-
-SELECT * FROM public.workspace;
