@@ -31,9 +31,9 @@ BEGIN
 
         IF is_admin IS NOT NULL THEN
 
-            -- Delete account from ref_account_workspace --
+            -- delete all account from ref_account_workspace --
             DELETE FROM public.ref_account_workspace
-                WHERE id_account = arg_account_index AND id_workspace = v_workspace_index;
+                WHERE id_workspace = v_workspace_index;
 
             -- store container name to delete on server function
             SELECT cloud_container_name FROM public.azure_cloud_container
@@ -60,9 +60,9 @@ BEGIN
     ------------------------- Called from internal function -------------------------
     ELSE
 
-        -- Delete account from ref_account_workspace --
+        -- delete all account from ref_account_workspace --
         DELETE FROM public.ref_account_workspace
-            WHERE id_account = arg_account_index AND id_workspace = v_workspace_index;
+            WHERE id_workspace = v_workspace_index;
 
         -- store container name to delete on server function
         SELECT cloud_container_name FROM public.azure_cloud_container
@@ -88,3 +88,6 @@ BEGIN
 END;
 $BODY$;
 
+SELECT * FROM public.delete_workspace(56, 'aaaaaaaaaa11', FALSE);
+
+SELECT * FROM public.account;

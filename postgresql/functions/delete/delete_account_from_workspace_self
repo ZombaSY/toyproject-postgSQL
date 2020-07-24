@@ -35,7 +35,6 @@ BEGIN
         return_code :=
             (SELECT * FROM public.update_account_default_workspace(arg_account_index));
 
-
         EXCEPTION
             WHEN SQLSTATE 'P0003' THEN
                 DELETE FROM public.ref_account_workspace
