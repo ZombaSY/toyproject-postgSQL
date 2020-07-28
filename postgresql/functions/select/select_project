@@ -137,13 +137,3 @@ BEGIN
 	END LOOP;
 END;
 $BODY$;
-
-
-SELECT * FROM public.select_project_in_workspace(8,4);
-
-SELECT * FROM public.select_project_by_user(8);
-
-
-select * from public.project inner join
-			  public.ref_account_project on project.id = ref_account_project.id_project
-			  where ref_account_project.id_account = 8;

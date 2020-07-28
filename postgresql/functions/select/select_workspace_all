@@ -6,6 +6,7 @@ CREATE OR REPLACE FUNCTION public.get_all_workspaces_info(
         tb_workspace_type SMALLINT,
         tb_workspace_account_permission SMALLINT,
         tb_workspace_child_projects INTEGER,
+        tb_workspace_child_belonged_projects INTEGER,
         tb_workspace_child_reports INTEGER)
     LANGUAGE 'plpgsql'
 
@@ -41,10 +42,14 @@ BEGIN
 			tb_workspace_type := var_record.visibility;
 			tb_workspace_account_permission := var_record.account_permission;
 			
-			-- Project nums --
+			-- all project nums --
 			tb_workspace_child_projects := 
 				(SELECT COUNT(*) FROM public.project
 					WHERE public.project.belonged_workspace_id = var_record.id);
+
+			-- only belonged project --
+			tb_workspace_child_belonged_projects :=
+				(SELECT COUNT(*) FROM public.select_project_in_workspace(arg_account_index,var_record.id));
 				
 			-- Report nums --
 			tb_workspace_child_reports := 
@@ -68,5 +73,10 @@ BEGIN
 END;
 $BODY$;
 
+SELECT COUNT(*) FROM public.select_project_in_workspace(1,4);
+SELECT * FROM public.get_all_workspaces_info(1);
 
-select * from PUBLIC.get_all_workspaces_info(8)
+SELECT * FROM public.project
+    WHERE public.project.belonged_workspace_id = 4;
+
+DROP FUNCTION get_all_workspaces_info(integer)

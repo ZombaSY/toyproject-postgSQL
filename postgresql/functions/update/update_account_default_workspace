@@ -67,6 +67,9 @@ BEGIN
                 WHERE id_account = arg_account_index
                 LIMIT 1);
     IF v_remained_workspace IS NULL THEN
+        UPDATE public.account
+            SET default_workspace = NULL
+            WHERE id = arg_account_index;
         return_code = -105;
     ELSE
         UPDATE public.account
