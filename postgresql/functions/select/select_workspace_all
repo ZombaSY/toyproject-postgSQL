@@ -7,7 +7,8 @@ CREATE OR REPLACE FUNCTION public.get_all_workspaces_info(
         tb_workspace_account_permission SMALLINT,
         tb_workspace_child_projects INTEGER,
         tb_workspace_child_belonged_projects INTEGER,
-        tb_workspace_child_reports INTEGER)
+        tb_workspace_child_reports INTEGER,
+        tb_workspace_owner_email TEXT)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -30,7 +31,8 @@ BEGIN
 			       public.workspace.access_key,
 			       public.workspace.name,
 			       public.workspace.visibility,
-			       public.ref_account_workspace.account_permission
+			       public.ref_account_workspace.account_permission,
+			       public.workspace.admin_id
 						FROM public.account 
 					INNER JOIN public.ref_account_workspace ON public.account.id = public.ref_account_workspace.id_account
 					INNER JOIN public.workspace ON public.ref_account_workspace.id_workspace = public.workspace.id 
@@ -56,6 +58,10 @@ BEGIN
 				(SELECT COUNT(*) FROM public.project
 					INNER JOIN public.report on public.project.id = public.report.belonged_project_id
 					WHERE public.project.belonged_workspace_id = var_record.id);
+
+			tb_workspace_owner_email :=
+			    (SELECT account_id FROM public.account
+			        WHERE id = var_record.admin_id);
 			
 			RETURN NEXT;
 		END LOOP;
@@ -73,10 +79,5 @@ BEGIN
 END;
 $BODY$;
 
-SELECT COUNT(*) FROM public.select_project_in_workspace(1,4);
-SELECT * FROM public.get_all_workspaces_info(1);
+DROP FUNCTION get_all_workspaces_info(integer);
 
-SELECT * FROM public.project
-    WHERE public.project.belonged_workspace_id = 4;
-
-DROP FUNCTION get_all_workspaces_info(integer)
