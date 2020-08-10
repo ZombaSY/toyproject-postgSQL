@@ -3,7 +3,7 @@ CREATE OR REPLACE FUNCTION public.getexperimentsession(
     RETURNS TABLE(
         tb_experiment_id_key TEXT,
         tb_experiment_names CHARACTER VARYING,
-        tb_experiment_logs TEXT[],
+        tb_experiment_logs TEXT,
         tb_experiment_output_log TEXT,
         tb_experiment_system_metrics TEXT,
         tb_experiment_hyper_parameter TEXT,
@@ -34,7 +34,7 @@ BEGIN
         RETURN QUERY
             SELECT DISTINCT public.experiment.access_key,
                 public.experiment.name,
-				public.experiment.log,
+				array_to_json(public.experiment.log)::text,
 				array_to_string(public.experiment.output_log, E'\n', '*') ,
 				array_to_string(public.experiment.system_metrics, E'\n', '*'),
 				public.experiment.hyper_parameter,
@@ -60,5 +60,8 @@ SELECT * FROM public.getexperimentsession('aaaaaaaaaa34');
 
 SELECT * FROM public.project;
 
+SELECT * FROM public.experiment;
 SELECT * FROM experiment WHERE belonged_project_id = 18;
 SELECT * FROM experiment WHERE belonged_project_id = 138;
+
+DROP FUNCTION getexperimentsession(text);
