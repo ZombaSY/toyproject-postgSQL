@@ -1,10 +1,9 @@
 CREATE OR REPLACE FUNCTION public.getexperimentsession(
-	arg_account_index INTEGER,
-	arg_belonged_project_id TEXT)
+	arg_belonged_project_id_key TEXT)
     RETURNS TABLE(
         tb_experiment_id_key TEXT,
         tb_experiment_names CHARACTER VARYING,
-        tb_experiment_logs TEXT,
+        tb_experiment_logs TEXT[],
         tb_experiment_output_log TEXT,
         tb_experiment_system_metrics TEXT,
         tb_experiment_hyper_parameter TEXT,
@@ -14,7 +13,8 @@ CREATE OR REPLACE FUNCTION public.getexperimentsession(
         tb_experiment_model_blob TEXT,
         tb_experiment_creator BIGINT,
         tb_experiment_created_dated TIMESTAMP WITHOUT TIME ZONE,
-        tb_experiment_status SMALLINT)
+        tb_experiment_status SMALLINT,
+        tb_experiment_chart_config TEXT)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -26,9 +26,8 @@ DECLARE
     v_project_id INTEGER;
 BEGIN
 
-    SELECT id_project FROM public.ref_account_project
-        INNER JOIN public.project ON public.project.id = public.ref_account_project.id_project
-        WHERE id_account = arg_account_index AND public.project.access_key = arg_belonged_project_id
+    SELECT id FROM public.project
+        WHERE public.project.access_key = arg_belonged_project_id_key
         INTO v_project_id;
 
     IF v_project_id IS NOT NULL THEN
@@ -45,7 +44,8 @@ BEGIN
 				array_to_string(public.experiment.model_blob_id, E'\n', '*'),
 				public.experiment.creator,
 				public.experiment.created_date,
-                public.experiment.experiment_state
+                public.experiment.experiment_state,
+                public.experiment.chart_config
 					FROM public.experiment
                 LEFT JOIN public.project ON public.experiment.belonged_project_id = public.project.id
                 WHERE public.project.id = v_project_id
@@ -55,6 +55,10 @@ BEGIN
     END IF;
 END;$BODY$;
 
-SELECT * FROM public.getexperimentsession(8,'aaaaaaaaaa34');
+SELECT * FROM public.getexperimentsession('4rneq38bfy2kvvt0');
+SELECT * FROM public.getexperimentsession('aaaaaaaaaa34');
 
-SELECT * FROM public.experiment;
+SELECT * FROM public.project;
+
+SELECT * FROM experiment WHERE belonged_project_id = 18;
+SELECT * FROM experiment WHERE belonged_project_id = 138;

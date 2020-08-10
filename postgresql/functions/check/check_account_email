@@ -1,0 +1,26 @@
+CREATE OR REPLACE FUNCTION public.check_account_email(
+	arg_account_email TEXT)
+    RETURNS TABLE(
+        tb_account_name TEXT,
+        tb_code BOOLEAN)
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+BEGIN
+	IF arg_account_email IN (SELECT account_id FROM public.account) THEN
+        tb_code := TRUE;
+        tb_account_name :=
+            (SELECT account_name FROM public.account
+                WHERE account_id = arg_account_email);
+    ELSE
+	    tb_code := FALSE;
+    END IF;
+
+    RETURN NEXT;
+
+END; $BODY$;
+
+SELECT * FROM public.check_account_email('tjxhwl@gmail.com')
