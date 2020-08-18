@@ -2,6 +2,120 @@ CREATE OR REPLACE FUNCTION public.get_one_project(
 	arg_account_index integer,
 	arg_project_index_key TEXT)
     RETURNS TABLE(
+        tb_id TEXT,
+        tb_name CHARACTER VARYING,
+        tb_description CHARACTER VARYING,
+        tb_creator_email TEXT,
+        tb_admin_email TEXT,
+        tb_created_date TIMESTAMP WITHOUT TIME ZONE,
+        tb_modified_date TIMESTAMP WITHOUT TIME ZONE,
+        tb_visibility SMALLINT,
+        tb_user_name_array TEXT,
+        tb_user_email_array TEXT,
+        tb_user_permission_array TEXT,
+        tb_user_count INTEGER,
+        tb_experiment_count INTEGER,
+        tb_report_count INTEGER,
+        tb_chart_config TEXT,
+        tb_belonged_container_name TEXT)
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+    ROWS 1000
+
+AS $BODY$
+DECLARE
+	r RECORD;
+    return_code INTEGER;
+
+    v_account_name TEXT;
+    v_account_email TEXT;
+    v_account_permission TEXT;
+    v_account_counter INTEGER;
+    v_project_id INTEGER;
+    v_project_visibility SMALLINT;
+    v_project_name TEXT;
+    v_project_description TEXT;
+    v_project_created_date TIMESTAMP;
+    v_project_modified_date TIMESTAMP;
+    v_project_creator_id INTEGER;
+    v_project_admin_id INTEGER;
+    v_project_chart_config TEXT;
+    v_project_container_name TEXT;
+BEGIN
+    SELECT public.project.id,
+           public.project.visibility,
+           public.project.name,
+           public.project.description,
+           public.project.created_date,
+           public.project.modified_date,
+           public.project.creator_id,
+           public.project.administrator_id,
+           public.project.chart_config,
+           public.azure_cloud_container.cloud_container_name
+        FROM public.project
+        INNER JOIN public.azure_cloud_container
+        ON public.project.belonged_workspace_id = public.azure_cloud_container.workspace_id
+        WHERE access_key =arg_project_index_key
+        INTO
+            v_project_id,
+            v_project_visibility,
+            v_project_name,
+            v_project_description,
+            v_project_created_date,
+            v_project_modified_date,
+            v_project_creator_id,
+            v_project_admin_id,
+            v_project_chart_config,
+            v_project_container_name;
+
+    SELECT * FROM public.select_account_info_from_project(v_project_id, v_project_visibility, arg_account_index)
+            INTO return_code, v_account_name, v_account_email, v_account_permission, v_account_counter;
+
+    -- If got an information from above function, fill the return table --
+    IF return_code = 0 THEN
+        tb_id := v_project_id;
+        tb_name := v_project_name;
+        tb_description := v_project_description;
+        tb_created_date := v_project_created_date;
+        tb_modified_date := v_project_modified_date;
+        tb_visibility := v_project_visibility;
+        tb_chart_config := v_project_chart_config;
+        tb_belonged_container_name := v_project_container_name;
+
+        tb_user_name_array := v_account_name;
+        tb_user_email_array := v_account_email;
+        tb_user_permission_array := v_account_permission;
+        tb_user_count := v_account_counter;
+
+        tb_creator_email := (SELECT DISTINCT public.account.account_id FROM public.account
+                                INNER JOIN public.project ON public.account.id = public.project.creator_id
+                                WHERE public.account.id = v_project_creator_id AND public.project.creator_id = v_project_creator_id);
+        tb_admin_email := (SELECT DISTINCT public.account.account_id FROM public.account
+                                INNER JOIN public.project ON public.account.id = public.project.administrator_id
+                                WHERE public.account.id = v_project_admin_id AND public.project.creator_id = v_project_admin_id);
+
+        tb_experiment_count := (SELECT COUNT(*) FROM public.experiment WHERE belonged_project_id = v_project_id);
+        tb_report_count := (SELECT COUNT(*) FROM public.report WHERE belonged_project_id = v_project_id);
+
+        RETURN NEXT;
+    END IF;
+END;
+$BODY$;
+
+SELECT * FROM public.get_one_project(8, 'gr2bxerljiimad2g');
+
+DROP FUNCTION get_one_project(integer,text);
+
+-- @@@@@@@@@@@@@@@@@ container name 리턴해서 서버에서 project usage 보여주게
+
+
+-- @@@@@@@@@@@@@@@@@@@@@ old version @@@@@@@@@@@@@@@@@@@@@@ --
+CREATE OR REPLACE FUNCTION public.get_one_project(
+	arg_account_index integer,
+	arg_project_index_key TEXT)
+    RETURNS TABLE(
         tb_code INTEGER,
         tb_name CHARACTER VARYING,
         tb_belonged_container_name CHARACTER VARYING)
@@ -39,6 +153,3 @@ BEGIN
 	END IF;
 END;
 $BODY$;
-
-
-SELECT * FROM public.get_one_project(8, 'aaaaaaaaaa34')
