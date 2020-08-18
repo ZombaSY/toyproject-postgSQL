@@ -29,8 +29,14 @@ BEGIN
 					   where id_account = arg_account_index and id_project = v_project_index)
 		LOOP
 		IF r.user_permission = 1 THEN
-			INSERT INTO ref_account_project(id_account, id_project, user_state) VALUES (arg_invite_index,v_project_index,r.user_state);
-			RETURN 0;
+		    BEGIN
+    			INSERT INTO ref_account_project(id_account, id_project, user_state) VALUES (arg_invite_index,v_project_index,r.user_state);
+			EXCEPTION
+		        WHEN
+		            SQLSTATE '23505' THEN
+		                RETURN -102;
+    		END;
+    		RETURN 0;
 		ELSE
 			RETURN 510;
 		END IF;
