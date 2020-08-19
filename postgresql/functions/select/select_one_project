@@ -109,6 +109,8 @@ SELECT * FROM public.get_one_project(8, 'gr2bxerljiimad2g');
 DROP FUNCTION get_one_project(integer,text);
 
 -- @@@@@@@@@@@@@@@@@ container name 리턴해서 서버에서 project usage 보여주게
+-- 현재 상태: DB에서 container name을 리턴함
+-- 할거: 서버에서 container name으로 project usage 구하기. 이미 구현되어있으니 container name 받는 쪽 확인
 
 
 -- @@@@@@@@@@@@@@@@@@@@@ old version @@@@@@@@@@@@@@@@@@@@@@ --
