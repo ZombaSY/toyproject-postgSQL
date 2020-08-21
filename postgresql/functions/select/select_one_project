@@ -43,6 +43,7 @@ DECLARE
     v_project_admin_id INTEGER;
     v_project_chart_config TEXT;
     v_project_container_name TEXT;
+    v_project_access_key TEXT;
 BEGIN
     SELECT public.project.id,
            public.project.visibility,
@@ -53,7 +54,8 @@ BEGIN
            public.project.creator_id,
            public.project.administrator_id,
            public.project.chart_config,
-           public.azure_cloud_container.cloud_container_name
+           public.azure_cloud_container.cloud_container_name,
+           public.project.access_key
         FROM public.project
         INNER JOIN public.azure_cloud_container
         ON public.project.belonged_workspace_id = public.azure_cloud_container.workspace_id
@@ -68,14 +70,15 @@ BEGIN
             v_project_creator_id,
             v_project_admin_id,
             v_project_chart_config,
-            v_project_container_name;
+            v_project_container_name,
+            v_project_access_key;
 
     SELECT * FROM public.select_account_info_from_project(v_project_id, v_project_visibility, arg_account_index)
             INTO return_code, v_account_name, v_account_email, v_account_permission, v_account_counter;
 
     -- If got an information from above function, fill the return table --
     IF return_code = 0 THEN
-        tb_id := v_project_id;
+        tb_id := v_project_access_key;
         tb_name := v_project_name;
         tb_description := v_project_description;
         tb_created_date := v_project_created_date;
