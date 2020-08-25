@@ -1,0 +1,32 @@
+CREATE OR REPLACE FUNCTION public.update_experiment_name(
+	arg_experiment_key TEXT,
+	arg_new_experiment_name TEXT)
+    RETURNS INTEGER
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+	return_code INTEGER;
+BEGIN
+    BEGIN
+        -- update experiment name --
+        UPDATE public.experiment
+            SET name = arg_new_experiment_name
+            WHERE access_key = arg_experiment_key;
+
+        return_code := 0;
+
+        EXCEPTION
+            WHEN SQLSTATE '23505' THEN
+                return_code := -100;    -- experiment name must be unique in a project --
+    END;
+
+    RETURN return_code;
+END
+$BODY$;
+
+SELECT * FROM public.update_experiment_name('vyxnabuxghh81npd', 'polite-skunk-6101');
+SELECT * FROM public.experiment;
