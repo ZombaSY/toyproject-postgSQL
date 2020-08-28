@@ -18,7 +18,7 @@ BEGIN
 
 	IF is_available IS TRUE THEN
 		UPDATE public.experiment
-		    SET finished_date = current_time
+		    SET finished_date = current_timestamp
 		    WHERE access_key = arg_experiment_id;
 		RETURN 0;
 	ELSE
@@ -27,3 +27,12 @@ BEGIN
 
 END;$BODY$;
 
+SELECT * FROM public.experiment ORDER BY id DESC;
+
+SELECT * FROM public.update_experiment_finished_date(
+    'yDkP7yqSSIHFNx1Myh3wSDgpEnLvt4a1',
+    'pjy1107@naver.com',
+    '2k81o7bouq75pq8t',
+    0);
+
+SELECT * FROM public.api_key;

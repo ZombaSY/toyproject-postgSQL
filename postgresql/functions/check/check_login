@@ -1,0 +1,40 @@
+create function logincheck(arg_account_email text)
+    returns TABLE(
+        id integer,
+        account_pwd character varying,
+        account_name character varying,
+        default_workspace_key text)
+    language plpgsql
+as
+$$
+DECLARE
+	v_record RECORD;
+	v_workspace_access_key text;
+    BEGIN
+		FOR v_record IN (SELECT public.account.id, public.account.account_pwd, public.account.account_name, public.account.default_workspace from public.account where account_id =arg_account_email)
+		LOOP
+			IF v_record.default_workspace is null then
+				id := v_record.id;
+				account_pwd := v_record.account_pwd;
+				account_name := v_record.account_name;
+				default_workspace_key := '-99';
+				return next;
+			else
+				v_workspace_access_key :=(SELECT access_key FROM workspace where public.workspace.id = v_record.default_workspace);
+				id := v_record.id;
+				account_pwd := v_record.account_pwd;
+				account_name := v_record.account_name;
+				default_workspace_key := v_workspace_access_key;
+				return next;
+			END IF;
+		END LOOP;
+    END;
+$$;
+
+alter function logincheck(text) owner to digger;
+
+SELECT * FROM public.account;
+SELECT * FROM public.workspace;
+
+SELECT * FROM public.log_info WHERE command = 6204 ORDER BY index DESC;
+SELECT * FROM public.log_info WHERE command = 3005 ORDER BY index DESC;
