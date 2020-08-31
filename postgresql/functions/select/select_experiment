@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION public.getexperimentsession(
         tb_experiment_code_blob_id BIGINT,
         tb_experiment_image_blob TEXT,
         tb_experiment_model_blob TEXT,
-        tb_experiment_creator BIGINT,
+        tb_experiment_creator CHARACTER VARYING,
         tb_experiment_created_dated TIMESTAMP WITHOUT TIME ZONE,
         tb_experiment_status SMALLINT,
         tb_experiment_chart_config TEXT)
@@ -42,12 +42,13 @@ BEGIN
 				public.experiment.code_blob_id,
 				array_to_string(public.experiment.image_blob_id, E'\n', '*'),
 				array_to_string(public.experiment.model_blob_id, E'\n', '*'),
-				public.experiment.creator,
+				public.account.account_id,
 				public.experiment.created_date,
                 public.experiment.experiment_state,
                 public.experiment.chart_config
 					FROM public.experiment
                 LEFT JOIN public.project ON public.experiment.belonged_project_id = public.project.id
+                LEFT JOIN public.account ON public.experiment.creator = public.account.id
                 WHERE public.project.id = v_project_id
                 ORDER BY public.experiment.created_date DESC;
     ELSE
@@ -57,11 +58,5 @@ END;$BODY$;
 
 SELECT * FROM public.getexperimentsession('4rneq38bfy2kvvt0');
 SELECT * FROM public.getexperimentsession('aaaaaaaaaa34');
-
-SELECT * FROM public.project;
-
-SELECT * FROM public.experiment;
-SELECT * FROM experiment WHERE belonged_project_id = 18;
-SELECT * FROM experiment WHERE belonged_project_id = 138;
 
 DROP FUNCTION getexperimentsession(text);
