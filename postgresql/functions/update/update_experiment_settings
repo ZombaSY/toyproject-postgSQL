@@ -1,8 +1,8 @@
-CREATE OR REPLACE FUNCTION public.update_experiment_state(
-	arg_api_key CHARACTER,
-	arg_account_id CHARACTER,
-	arg_experiment_id CHARACTER,
-	arg_experiment_state INTEGER)
+CREATE OR REPLACE FUNCTION public.update_experiment_settings(
+	arg_account_id INTEGER,
+	arg_experiment_id TEXT,
+	arg_experiment_name TEXT,
+	arg_experiment_description TEXT)
     RETURNS INTEGER
     LANGUAGE 'plpgsql'
 
@@ -11,13 +11,49 @@ CREATE OR REPLACE FUNCTION public.update_experiment_state(
 
 AS $BODY$
 DECLARE
-	is_available boolean;
+    return_code INTEGER;
+	v_account_permission SMALLINT;
 BEGIN
-	is_available :=(SELECT * FROM public.is_available_apikey(arg_api_key,arg_account_id));
-	IF is_available IS TRUE THEN
-		UPDATE public.experiment SET experiment_state = arg_experiment_state WHERE access_key = arg_experiment_id;
-		RETURN 0;
-	ELSE
-		RETURN 125;
-	END IF;
+    -- check account permission --
+	v_account_permission :=
+	    (SELECT user_permission FROM public.experiment
+            LEFT JOIN public.project ON public.experiment.belonged_project_id = public.project.id
+            LEFT JOIN public.ref_account_project ON public.ref_account_project.id_project = public.project.id
+            WHERE public.experiment.access_key = arg_experiment_id AND
+                  public.ref_account_project.id_account = arg_account_id);
+
+    IF v_account_permission = 1 THEN
+        BEGIN
+            -- update settings --
+            UPDATE public.experiment
+                SET description = arg_experiment_description, name = arg_experiment_name
+                WHERE access_key = arg_experiment_id;
+            return_code := 0;
+            EXCEPTION
+                WHEN
+                    SQLSTATE '23505' THEN
+                        return_code := 101; -- experiment name must be unique in a project --
+        END;
+    ELSE
+        return_code := -100; -- permission denied --
+    END IF;
+
+    RETURN return_code;
+
 END;$BODY$;
+
+SELECT * FROM public.experiment;
+SELECT * FROM public.account;
+
+SELECT user_permission FROM public.experiment
+    LEFT JOIN public.project ON public.experiment.belonged_project_id = public.project.id
+    LEFT JOIN public.ref_account_project ON public.ref_account_project.id_project = public.project.id
+    WHERE public.experiment.access_key = 'mv8gpwsa5yoqqmb8' AND
+          public.ref_account_project.id_account = 69;
+
+SELECT * FROM public.update_experiment_settings(
+    69,
+    'mv8gpwsa5yoqqmb8',
+    'sunyong is god',
+    'sunyong description');
+
