@@ -1,27 +1,25 @@
-CREATE OR REPLACE FUNCTION public.getexperimentsession(
-	arg_belonged_project_id_key TEXT)
-    RETURNS TABLE(
-        tb_experiment_id_key TEXT,
-        tb_experiment_names CHARACTER VARYING,
-        tb_experiment_logs TEXT,
-        tb_experiment_output_log TEXT,
-        tb_experiment_system_metrics TEXT,
-        tb_experiment_hyper_parameter TEXT,
-        tb_experiment_requirements TEXT,
-        tb_experiment_code_blob_id BIGINT,
-        tb_experiment_image_blob TEXT,
-        tb_experiment_model_blob TEXT,
-        tb_experiment_creator CHARACTER VARYING,
-        tb_experiment_created_dated TIMESTAMP WITHOUT TIME ZONE,
-        tb_experiment_status SMALLINT,
-        tb_experiment_chart_config TEXT)
-    LANGUAGE 'plpgsql'
-
-    COST 100
-    VOLATILE
-    ROWS 1000
-
-AS $BODY$
+create or replace function getexperimentsession(arg_belonged_project_id_key text)
+    returns TABLE(
+        tb_experiment_id_key text,
+        tb_experiment_names character varying,
+        tb_experiment_logs text,
+        tb_experiment_output_log text,
+        tb_experiment_system_metrics text,
+        tb_experiment_hyper_parameter text,
+        tb_experiment_requirements text,
+        tb_experiment_code_blob_id bigint,
+        tb_experiment_image_blob text,
+        tb_experiment_model_blob text,
+        tb_experiment_creator character varying,
+        tb_experiment_created_dated timestamp without time zone,
+        tb_experiment_status smallint,
+        tb_experiment_chart_config text,
+        tb_experiment_run_path TEXT,
+        tb_experiment_finished_date TIMESTAMP WITHOUT TIME ZONE,
+        tb_experiment_description TEXT)
+    language plpgsql
+as
+$$
 DECLARE
     v_project_id INTEGER;
 BEGIN
@@ -45,7 +43,10 @@ BEGIN
 				public.account.account_id,
 				public.experiment.created_date,
                 public.experiment.experiment_state,
-                public.experiment.chart_config
+                public.experiment.chart_config,
+                public.experiment.run_path,
+                public.experiment.finished_date,
+                public.experiment.description
 					FROM public.experiment
                 LEFT JOIN public.project ON public.experiment.belonged_project_id = public.project.id
                 LEFT JOIN public.account ON public.experiment.creator = public.account.id
@@ -54,9 +55,11 @@ BEGIN
     ELSE
         RETURN NEXT;
     END IF;
-END;$BODY$;
+END;
+$$;
 
-SELECT * FROM public.getexperimentsession('4rneq38bfy2kvvt0');
-SELECT * FROM public.getexperimentsession('aaaaaaaaaa34');
+alter function getexperimentsession(text) owner to digger;
 
 DROP FUNCTION getexperimentsession(text);
+SELECT * FROM public.experiment;
+
