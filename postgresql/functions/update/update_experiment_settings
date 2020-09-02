@@ -13,8 +13,10 @@ AS $BODY$
 DECLARE
     return_code INTEGER;
 	v_account_permission SMALLINT;
+    v_experiment_creator_id INTEGER;
+    v_project_owner_id INTEGER;
 BEGIN
-    -- check account permission --
+    -- check account permission: is project maintainer --
 	v_account_permission :=
 	    (SELECT user_permission FROM public.experiment
             LEFT JOIN public.project ON public.experiment.belonged_project_id = public.project.id
@@ -22,7 +24,19 @@ BEGIN
             WHERE public.experiment.access_key = arg_experiment_id AND
                   public.ref_account_project.id_account = arg_account_id);
 
-    IF v_account_permission = 1 THEN
+    -- check account permission: is experiment creator --
+    v_experiment_creator_id :=
+        (SELECT creator FROM public.experiment
+            WHERE access_key = arg_experiment_id);
+
+    v_project_owner_id :=
+        (SELECT public.project.administrator_id FROM public.experiment
+            LEFT JOIN public.project ON public.experiment.belonged_project_id = public.project.id
+            WHERE public.experiment.access_key = arg_experiment_id);
+
+    IF v_account_permission = 1 OR
+       arg_account_id = v_experiment_creator_id OR
+       arg_account_id = v_project_owner_id THEN
         BEGIN
             -- update settings --
             UPDATE public.experiment
@@ -32,7 +46,7 @@ BEGIN
             EXCEPTION
                 WHEN
                     SQLSTATE '23505' THEN
-                        return_code := 101; -- experiment name must be unique in a project --
+                        return_code := -101; -- experiment name must be unique in a project --
         END;
     ELSE
         return_code := -100; -- permission denied --
@@ -42,18 +56,24 @@ BEGIN
 
 END;$BODY$;
 
-SELECT * FROM public.experiment;
-SELECT * FROM public.account;
+SELECT creator FROM public.experiment
+    WHERE access_key = 'g7nbuenkacr43eub';
 
-SELECT user_permission FROM public.experiment
+SELECT * FROM public.account;
+SELECT * FROM public.project;
+
+SELECT public.project.administrator_id FROM public.experiment
     LEFT JOIN public.project ON public.experiment.belonged_project_id = public.project.id
-    LEFT JOIN public.ref_account_project ON public.ref_account_project.id_project = public.project.id
-    WHERE public.experiment.access_key = 'mv8gpwsa5yoqqmb8' AND
-          public.ref_account_project.id_account = 69;
+    WHERE public.experiment.access_key = 'g7nbuenkacr43eub';
 
 SELECT * FROM public.update_experiment_settings(
-    69,
-    'mv8gpwsa5yoqqmb8',
-    'sunyong is god',
+    200,
+    'mi0ufhq71xyse1if',
+    'sunyong is',
     'sunyong description');
+
+SELECT * FROM session
+    WHERE session_key = 'BFzcoJSfXzpTxoNgKo7adziX2lpkrZm6';
+
+
 
