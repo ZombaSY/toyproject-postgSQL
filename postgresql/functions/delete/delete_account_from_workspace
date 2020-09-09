@@ -51,8 +51,8 @@ BEGIN
 				WHEN SQLSTATE 'P0003' THEN
 					DELETE FROM public.ref_account_workspace
 						WHERE id_account = v_kicked_account_index AND id_workspace = v_workspace_index;
+
 					return_code := -1; -- More than one same row in table --
-					return return_code;
 		END;
 
 		IF return_code IS NULL THEN
@@ -60,7 +60,8 @@ BEGIN
 		END IF;
 	ELSE
 		return_code := -100;	-- Kicker has no permission --
-		RETURN return_code;
 	END IF;
+
+    RETURN return_code;
 END;
 $BODY$;
