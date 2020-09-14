@@ -33,8 +33,19 @@ $$;
 
 alter function logincheck(text) owner to digger;
 
-SELECT * FROM public.account;
+SELECT * FROM public.logincheck('whddufwhdduf@digger.works');
+SELECT * FROM public.logincheck('tjxhwl@gmail.com');
 SELECT * FROM public.workspace;
+SELECT * FROM public.account;
 
-SELECT * FROM public.log_info WHERE command = 6204 ORDER BY index DESC;
-SELECT * FROM public.log_info WHERE command = 3005 ORDER BY index DESC;
+UPDATE public.account
+    SET default_workspace = 45
+    WHERE id = 41;
+SELECT * FROM public.log_info
+    WHERE user_id = '41' AND
+          NOT command = 3054 AND
+          NOT command = 4002 AND
+          NOT command = 3004 AND
+          NOT command = 3055 AND
+          NOT command = 3056
+    ORDER BY date_time DESC;
