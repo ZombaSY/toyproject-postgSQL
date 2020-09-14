@@ -63,7 +63,7 @@ DECLARE
     v_remained_workspace INTEGER;
 BEGIN
     v_remained_workspace :=
-        (SELECT id_account FROM public.ref_account_workspace
+        (SELECT id_workspace FROM public.ref_account_workspace
                 WHERE id_account = arg_account_index
                 LIMIT 1);
     IF v_remained_workspace IS NULL THEN
