@@ -1,0 +1,68 @@
+CREATE OR REPLACE FUNCTION public.update_workspace_account_permission(
+	arg_account_index integer,
+	arg_workspace_index_key TEXT,
+	arg_alter_account_email text,
+	arg_alter_account_permission integer)
+    RETURNS integer
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+    v_workspace_index INTEGER;
+	v_user_permission INTEGER;
+	v_alter_account_index INTEGER;
+    v_owner_id INTEGER;
+	return_code INTEGER;
+BEGIN
+    SELECT id, admin_id FROM public.workspace
+        WHERE public.workspace.access_key = arg_workspace_index_key
+        INTO v_workspace_index, v_owner_id;
+
+	-- Check account's permission --
+	v_user_permission := (
+	    SELECT account_permission FROM public.ref_account_workspace
+            WHERE id_account = arg_account_index AND
+                  id_workspace = v_workspace_index);
+
+	-- Get account index by email --
+	BEGIN
+		v_alter_account_index := (SELECT * FROM public.get_account_index(arg_alter_account_email));
+		EXCEPTION
+			WHEN SQLSTATE 'P0001' THEN
+				RETURN -102;
+	END;
+
+    -- is maintainer or owner--
+	IF v_user_permission = 1 OR arg_account_index = v_owner_id THEN
+
+		IF v_alter_account_index = v_owner_id THEN
+			return_code := -101;    -- cannot change owner permission --
+			RETURN return_code;
+
+		ELSE
+		    -- update permission --
+            UPDATE public.ref_account_workspace
+                SET account_permission = arg_alter_account_permission
+                WHERE id_account = v_alter_account_index AND
+                      id_workspace = v_workspace_index;
+
+            return_code := 0;
+            RETURN return_code;
+        END IF;
+
+	ELSE
+		return_code := -100;	-- Permission Denied --
+		RETURN return_code;
+	END IF;
+END;
+$BODY$;
+
+SELECT * FROM public.update_workspace_account_permission(
+    2,
+    'aaaaaaaaaa2',
+    'zlekfl19@naver.com',
+    1
+    );
