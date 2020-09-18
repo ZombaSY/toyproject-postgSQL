@@ -1,0 +1,30 @@
+CREATE OR REPLACE FUNCTION public.insert_pending_account_to_workspace(
+	arg_account_email TEXT,
+	arg_workspace_id_key TEXT)
+
+    RETURNS INTEGER
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+	return_code INTEGER := 0;
+    v_workspace_index INTEGER;
+BEGIN
+    v_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_workspace_id_key);
+
+    BEGIN
+        INSERT INTO public.pending_account
+            VALUES(arg_account_email, v_workspace_index);
+
+        EXCEPTION WHEN
+            SQLSTATE '23505' THEN
+                return_code := -100;    -- duplicated email --
+    END;
+
+	RETURN return_code;
+END;
+$BODY$;

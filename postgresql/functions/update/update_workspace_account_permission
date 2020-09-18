@@ -66,3 +66,9 @@ SELECT * FROM public.update_workspace_account_permission(
     'zlekfl19@naver.com',
     1
     );
+
+SELECT * FROM public.email;
+SELECT * FROM public.workspace;
+
+SELECT * FROM public.email;
+DELETE FROM public.email    WHERE email_address = 'tjxhel@gmail.com';
