@@ -1,6 +1,7 @@
 CREATE OR REPLACE FUNCTION public.insert_pending_account_to_workspace(
 	arg_account_email TEXT,
-	arg_workspace_id_key TEXT)
+	arg_workspace_id_key TEXT,
+	arg_invitor_index INTEGER)
 
     RETURNS INTEGER
     LANGUAGE 'plpgsql'
@@ -17,8 +18,8 @@ BEGIN
         (SELECT id FROM public.workspace WHERE access_key = arg_workspace_id_key);
 
     BEGIN
-        INSERT INTO public.pending_account
-            VALUES(arg_account_email, v_workspace_index);
+        INSERT INTO public.pending_account(account_email, workspace_id, invitor_id)
+            VALUES(arg_account_email, v_workspace_index, arg_invitor_index);
 
         EXCEPTION WHEN
             SQLSTATE '23505' THEN
@@ -28,3 +29,5 @@ BEGIN
 	RETURN return_code;
 END;
 $BODY$;
+
+
