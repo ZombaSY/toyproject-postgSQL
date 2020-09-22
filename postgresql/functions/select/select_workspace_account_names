@@ -3,9 +3,10 @@ CREATE OR REPLACE FUNCTION public.get_workspace_account_names(
 	arg_workspace_index_key TEXT)
     RETURNS TABLE(
         tb_code INTEGER,
-        tb_account_name TEXT,
-        tb_account_email TEXT,
-        tb_account_permission TEXT)
+        tb_normal_account_name TEXT,
+        tb_normal_account_email TEXT,
+        tb_normal_account_permission TEXT,
+        tb_pending_account_name TEXT)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -15,9 +16,10 @@ CREATE OR REPLACE FUNCTION public.get_workspace_account_names(
 AS $BODY$
 DECLARE
 	check_query BOOLEAN := FALSE;
-	v_account_names TEXT [];
-    v_account_emails TEXT [];
-    v_account_permissions TEXT [];
+	v_normal_account_names TEXT [];
+    v_normal_account_emails TEXT [];
+    v_normal_account_permissions TEXT [];
+    v_pending_account_permissions TEXT [];
     v_workspace_index INTEGER;
 BEGIN
     v_workspace_index :=
@@ -31,13 +33,20 @@ BEGIN
         SELECT array_agg(account_name), array_agg(account_id), array_agg(account_permission) FROM public.ref_account_workspace
             INNER JOIN public.account ON public.account.id = public.ref_account_workspace.id_account
             WHERE public.ref_account_workspace.id_workspace = v_workspace_index
-            INTO v_account_names, v_account_emails, v_account_permissions;
+            INTO v_normal_account_names, v_normal_account_emails, v_normal_account_permissions;
 
-		tb_account_name := ARRAY_TO_STRING(v_account_names, ',');
-		tb_account_email := ARRAY_TO_STRING(v_account_emails, ',');
-        tb_account_permission := ARRAY_TO_STRING(v_account_permissions, ',');
+        SELECT array_agg(account_email) FROM public.pending_account
+            WHERE public.pending_account.workspace_id = v_workspace_index
+            INTO v_pending_account_permissions;
+
+		tb_normal_account_name := ARRAY_TO_STRING(v_normal_account_names, ',');
+		tb_normal_account_email := ARRAY_TO_STRING(v_normal_account_emails, ',');
+        tb_normal_account_permission := ARRAY_TO_STRING(v_normal_account_permissions, ',');
+
+        tb_pending_account_name := ARRAY_TO_STRING(v_pending_account_permissions, ',');
+
 		tb_code := 0;
+
 		RETURN NEXT;
 	END IF;
 END;$BODY$;
-
