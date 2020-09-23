@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION public.inviteproject(
 	arg_account_index INTEGER,
-	arg_invite_index INTEGER,
+	arg_invite_email TEXT,
 	arg_project_id TEXT,
 	arg_workspace_id_key TEXT)
     RETURNS INTEGER
@@ -11,37 +11,60 @@ CREATE OR REPLACE FUNCTION public.inviteproject(
 
 AS $BODY$
 DECLARE
+    r RECORD;
     check_query INTEGER:= -1;
     v_project_index INTEGER;
-    r RECORD;
     v_workspace_index INTEGER;
+    v_invited_index INTEGER;
+    return_code INTEGER := 0;
 BEGIN
     v_workspace_index :=
         (SELECT id FROM public.workspace WHERE access_key = arg_workspace_id_key);
-	check_query :=
-	    (SELECT count(*) FROM public.ref_account_workspace WHERE id_workspace = v_workspace_index AND (id_account = arg_account_index OR id_account = arg_invite_index));
+    v_invited_index :=
+        (SELECT id FROM public.account
+            WHERE account_id = arg_invite_email);
+
+    IF v_invited_index IS NOT NULL THEN
+        check_query :=
+            (SELECT count(*) FROM public.ref_account_workspace WHERE id_workspace = v_workspace_index AND (id_account = arg_account_index OR id_account = v_invited_index));
+    ELSE
+        RETURN -100;
+    END IF;
 
 	IF check_query = 2 THEN
+        RAISE NOTICE '98';
 	    v_project_index :=
 	        (SELECT id FROM public.project
 	            WHERE access_key = arg_project_id);
+
+        RAISE NOTICE '97';
 		FOR r IN(select * from public.ref_account_project
 					   where id_account = arg_account_index and id_project = v_project_index)
 		LOOP
 		IF r.user_permission = 1 THEN
+            RAISE NOTICE '4';
 		    BEGIN
-    			INSERT INTO ref_account_project(id_account, id_project, user_state) VALUES (arg_invite_index,v_project_index,r.user_state);
+		        RAISE NOTICE '4';
+    			INSERT INTO ref_account_project(id_account, id_project, user_state) VALUES (v_invited_index,v_project_index,r.user_state);
 			EXCEPTION
 		        WHEN
 		            SQLSTATE '23505' THEN
-		                RETURN -102;
+		                return_code := -102;
     		END;
-    		RETURN 0;
+                RAISE NOTICE '3';
 		ELSE
-			RETURN 510;
+            RAISE NOTICE '99';
+			return_code := 510;
 		END IF;
 		END LOOP;
+
+        IF r IS NULL THEN
+            return_code := -101;
+        END IF;
 	ELSE
-		RETURN 511;
+		return_code := 511;
 	END IF;
+
+    RETURN return_code;
 END; $BODY$;
+
