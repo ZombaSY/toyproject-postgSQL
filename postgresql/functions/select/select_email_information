@@ -1,0 +1,41 @@
+CREATE OR REPLACE FUNCTION public.select_email_invitation_information(
+	arg_account_index INTEGER,
+	arg_workspace_key TEXT)
+    RETURNS TABLE(
+        tb_return_code INTEGER,
+        tb_invitor_name TEXT,
+        tb_invitor_email TEXT,
+        tb_workspace_name TEXT
+    )
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+	v_workspace_index INTEGER;
+BEGIN
+	v_workspace_index :=
+	    (SELECT id FROM public.workspace
+	        WHERE access_key = arg_workspace_key);
+
+	IF v_workspace_index IS NOT NULL THEN
+        SELECT public.account.account_id,
+               public.account.account_name,
+               public.workspace.name
+                FROM public.ref_account_workspace
+            INNER JOIN public.account ON public.account.id = public.ref_account_workspace.id_account
+            INNER JOIN public.workspace ON public.workspace.id = public.ref_account_workspace.id_workspace
+            WHERE public.ref_account_workspace.id_account = arg_account_index AND
+                  public.ref_account_workspace.id_workspace = v_workspace_index
+            INTO tb_invitor_email, tb_invitor_name, tb_workspace_name;
+
+        tb_return_code := 0;
+	ELSE
+	    tb_return_code := -99; -- No workspace found equals to workspace key
+    END IF;
+
+	RETURN NEXT;
+END;
+$BODY$;
