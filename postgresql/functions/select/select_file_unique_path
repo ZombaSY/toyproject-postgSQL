@@ -49,3 +49,25 @@ BEGIN
 END;
 $BODY$;
 
+SELECT * FROM public.select_file_unique_path(
+    'wXrjgOkhcJQzdZawYEYXDqY2HkFM7FzJ',
+    'support@digger.works',
+'Digger',
+    'auto_digo_test',
+    'fine-frog-7090'
+    )
+
+SELECT  public.workspace.access_key,
+        public.project.access_key,
+        public.experiment.access_key
+            FROM public.workspace
+        LEFT JOIN public.project ON public.project.belonged_workspace_id = public.workspace.id
+        LEFT JOIN public.experiment ON public.experiment.belonged_project_id = public.project.id
+        LEFT JOIN public.ref_account_workspace ON public.ref_account_workspace.id_workspace = public.workspace.id
+        LEFT JOIN public.account ON public.ref_account_workspace.id_account = public.account.id
+        LEFT JOIN api_key ON public.api_key.account_id = public.account.account_id
+        WHERE public.api_key.api_key = 'wXrjgOkhcJQzdZawYEYXDqY2HkFM7FzJ' AND
+              public.account.account_id = 'support@digger.works' AND
+              public.workspace.name = 'Digger' AND
+              public.project.name = 'auto_digo_test' AND
+              public.experiment.name = 'fine-frog-7090';
