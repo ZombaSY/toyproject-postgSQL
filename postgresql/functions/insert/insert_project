@@ -1,10 +1,13 @@
-CREATE OR REPLACE FUNCTION createprojectsession(
-    arg_account_index INTEGER,
-    arg_project_name CHARACTER,
-    arg_belonged_workspace_id_key TEXT,
-    arg_description CHARACTER,
-    arg_visibility INTEGER)
-    RETURNS TABLE(code INTEGER)
+create or replace function createprojectsession(
+    arg_account_index integer,
+    arg_project_name character,
+    arg_belonged_workspace_id_key text,
+    arg_description character,
+    arg_visibility integer)
+
+    returns TABLE(
+        tb_code integer,
+        tb_project_key TEXT)
     language plpgsql
 as
 $$
@@ -39,7 +42,8 @@ BEGIN
 			     -- Create Project --
 				INSERT INTO public.project(
 					name, belonged_workspace_id, description, creator_id, administrator_id, visibility, access_key)
-					VALUES (arg_project_name, v_workspace_index, arg_description, arg_account_index, arg_account_index, arg_visibility, v_random_string) RETURNING id INTO cur_project_id;
+					VALUES (arg_project_name, v_workspace_index, arg_description, arg_account_index, arg_account_index, arg_visibility, v_random_string)
+					RETURNING id INTO cur_project_id;
 				IF arg_visibility != 0 THEN
 					INSERT INTO public.ref_account_project(id_account,id_project,user_state, user_permission)
 													VALUES (arg_account_index,cur_project_id,1, 1);
@@ -47,20 +51,22 @@ BEGIN
 					INSERT INTO public.ref_account_project(id_account,id_project, user_permission)
 													VALUES (arg_account_index,cur_project_id, 1);
 				END IF;
-				code := 0;
+				tb_code := 0;
+			    tb_project_key := v_random_string;
+
 				RETURN NEXT;
 
 				EXCEPTION
 					WHEN SQLSTATE '23505' THEN
-						code := -102;
+						tb_code := -102;
 						RETURN NEXT;
 			END;
 		ELSE
-			code := -101;
+			tb_code := -101;
 			RETURN NEXT;
 		END IF;
 	ELSE
-		code := -100;
+		tb_code := -100;
 		RETURN NEXT;
 	END IF;
 END;

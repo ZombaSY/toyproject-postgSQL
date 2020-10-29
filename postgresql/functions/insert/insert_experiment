@@ -6,7 +6,8 @@ CREATE OR REPLACE FUNCTION createexperiment(
     arg_experiment_name CHARACTER)
     RETURNS TABLE(
         experiment_id_key CHARACTER,
-        project_id_key TEXT)
+        project_id_key TEXT,
+        workspace_id_key TEXT)
     LANGUAGE plpgsql
 as
 $$
@@ -21,7 +22,8 @@ BEGIN
 
 	SELECT DISTINCT public.project.id,
                     public.account.id,
-                    public.project.access_key
+                    public.project.access_key,
+	                public.workspace.access_key
                         FROM public.account
 		LEFT JOIN public.api_key ON public.api_key.account_id = public.account.account_id
 		LEFT JOIN public.workspace ON public.workspace.name = arg_workspace_name
@@ -29,7 +31,7 @@ BEGIN
 		WHERE public.api_key.api_key = arg_api_key AND
 		      public.project.name = arg_project_name AND
 		      public.account.account_id = arg_account_id
-	    INTO var_project_id, var_account_index, var_project_access_key;
+	    INTO var_project_id, var_account_index, var_project_access_key, workspace_id_key;
 
 
 	IF var_project_id IS NULL THEN
@@ -49,12 +51,91 @@ BEGIN
         END LOOP;
 
 	    -- Create experiment --
-		INSERT INTO public.experiment (name, belonged_project_id, creator, access_key)
+		INSERT INTO public.experiment(
+		                              name,
+		                              belonged_project_id,
+		                              creator,
+		                              access_key)
+            VALUES (
+                    arg_experiment_name,
+                    var_project_id,
+                    var_account_index,
+                    v_random_string)
+		RETURNING experiment.id INTO temp_experiment_id;
+
+		project_id_key := var_project_access_key;
+		experiment_id_key := v_random_string;
+
+		RETURN NEXT;
+	END IF;
+END;
+$$;
+
+
+-- @@@@@@@@@@@@@@@@@@ Auto DIGO overloading @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ --
+
+create function createexperiment(
+    arg_api_key character,
+    arg_account_id character,
+    arg_workspace_name character,
+    arg_project_name character,
+    arg_experiment_name character,
+    arg_auto_digo_id bigint)
+
+    RETURNS TABLE(
+        experiment_id_key CHARACTER,
+        project_id_key TEXT,
+        workspace_id_key TEXT)
+    language plpgsql
+as
+$$
+DECLARE
+	var_project_id INTEGER;
+    var_project_access_key TEXT;
+	temp_experiment_id INTEGER;
+	var_account_index INTEGER;
+    v_random_string TEXT;
+    is_available_access_key BOOL := FALSE;
+BEGIN
+
+	SELECT DISTINCT public.project.id,
+                    public.account.id,
+                    public.project.access_key,
+	                public.workspace.access_key
+                        FROM public.account
+		LEFT JOIN public.api_key ON public.api_key.account_id = public.account.account_id
+		LEFT JOIN public.workspace ON public.workspace.name = arg_workspace_name
+		LEFT JOIN public.project ON public.project.belonged_workspace_id = public.workspace.id
+		WHERE public.api_key.api_key = arg_api_key AND
+		      public.project.name = arg_project_name AND
+		      public.account.account_id = arg_account_id
+	    INTO var_project_id, var_account_index, var_project_access_key, workspace_id_key;
+
+
+	IF var_project_id IS NULL THEN
+		RAISE WARNING 'Project does not found!!!';
+	ELSE
+
+	    -- Generate unique access key --
+	    WHILE is_available_access_key IS NOT TRUE
+        LOOP
+	        v_random_string := (SELECT * FROM public.generate_random_string(16));
+            IF v_random_string IN
+                (SELECT access_key FROM public.experiment) THEN
+                RAISE NOTICE 'access key is already in DB. Generate again.';
+            ELSE
+                is_available_access_key := TRUE;
+            END IF;
+        END LOOP;
+
+	    -- Create experiment --
+		INSERT INTO public.experiment (name, belonged_project_id, creator, access_key, auto_digo_id)
 		VALUES (
 		        arg_experiment_name,
 		        var_project_id,
 		        var_account_index,
-		        v_random_string)
+		        v_random_string,
+		        arg_auto_digo_id)
 		RETURNING experiment.id INTO temp_experiment_id;
 
 		project_id_key := var_project_access_key;
