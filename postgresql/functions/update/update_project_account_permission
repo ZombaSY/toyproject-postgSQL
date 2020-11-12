@@ -3,7 +3,9 @@ CREATE OR REPLACE FUNCTION public.update_project_account_permission(
 	arg_project_index_key TEXT,
 	arg_alter_account_email text,
 	arg_alter_account_permission integer)
-    RETURNS integer
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_project_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -15,7 +17,6 @@ DECLARE
 	v_user_permission INTEGER;
 	v_alter_account_index INTEGER;
     v_administrator_id INTEGER;
-	return_code INTEGER;
 BEGIN
     v_project_index :=
         (SELECT id FROM public.project WHERE public.project.access_key = arg_project_index_key);
@@ -29,7 +30,8 @@ BEGIN
 		v_alter_account_index := (SELECT * FROM public.get_account_index(arg_alter_account_email));
 		EXCEPTION
 			WHEN SQLSTATE 'P0001' THEN
-				RETURN -102;
+				tb_code := -102;
+				RETURN NEXT;
 	END;
 
 	IF v_user_permission = 1 THEN	-- Is Maintainer --
@@ -40,21 +42,22 @@ BEGIN
 				WHERE public.ref_account_project.id_account = arg_account_index AND public.ref_account_project.id_project = v_project_index);
 
 		IF v_alter_account_index = v_administrator_id THEN
-			return_code := -101;    -- Cannot change admin's permission --
-			RETURN return_code;
+			tb_code := -101;    -- Cannot change admin's permission --
+			RETURN NEXT;
 
 		ELSE
             UPDATE public.ref_account_project
                 SET user_permission = arg_alter_account_permission
                 WHERE id_account = v_alter_account_index AND id_project = v_project_index;
 
-            return_code := 0;
-            RETURN return_code;
+            tb_code := 0;
+            tb_project_id := v_project_index;
+            RETURN NEXT;
         END IF;
 
 	ELSE
-		return_code := -100;	-- Permission Denied --
-		RETURN return_code;
+		tb_code := -100;	-- Permission Denied --
+		RETURN NEXT;
 	END IF;
 END;
 $BODY$;

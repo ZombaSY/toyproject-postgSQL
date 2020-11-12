@@ -2,7 +2,6 @@ CREATE OR REPLACE FUNCTION createworkspace(
     arg_account_index INTEGER,
     arg_workspace_name CHARACTER VARYING,
     arg_visibility INTEGER,
-    arg_cloud_container_name CHARACTER VARYING,
     arg_account_permission INTEGER)
     RETURNS TABLE(
         tb_code INTEGER,
@@ -64,8 +63,8 @@ BEGIN
 				VALUES (cur_id_account, cur_id_workspace, arg_account_permission);
 
             -- Create azure cloud container in DB --
-			INSERT INTO public.azure_cloud_container(cloud_container_name, workspace_id)
-				VALUES (arg_cloud_container_name, cur_id_workspace);
+			INSERT INTO public.azure_cloud_container(workspace_id, cloud_container_name)
+				VALUES (cur_id_workspace, 'TEMP NULL NO AZURE');
 			tb_code := 0;
 		ELSE
 			tb_code := 170;
@@ -74,4 +73,3 @@ BEGIN
 	END IF;
 END;
 $$;
-

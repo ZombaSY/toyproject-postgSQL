@@ -3,7 +3,9 @@ CREATE OR REPLACE FUNCTION public.inviteproject(
 	arg_invite_email TEXT,
 	arg_project_id TEXT,
 	arg_workspace_id_key TEXT)
-    RETURNS INTEGER
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_project_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -16,7 +18,6 @@ DECLARE
     v_project_index INTEGER;
     v_workspace_index INTEGER;
     v_invited_index INTEGER;
-    return_code INTEGER := 0;
 BEGIN
     v_workspace_index :=
         (SELECT id FROM public.workspace WHERE access_key = arg_workspace_id_key);
@@ -28,43 +29,39 @@ BEGIN
         check_query :=
             (SELECT count(*) FROM public.ref_account_workspace WHERE id_workspace = v_workspace_index AND (id_account = arg_account_index OR id_account = v_invited_index));
     ELSE
-        RETURN -100;
+        tb_code := -100;
     END IF;
 
 	IF check_query = 2 THEN
-        RAISE NOTICE '98';
 	    v_project_index :=
 	        (SELECT id FROM public.project
 	            WHERE access_key = arg_project_id);
 
-        RAISE NOTICE '97';
 		FOR r IN(select * from public.ref_account_project
 					   where id_account = arg_account_index and id_project = v_project_index)
 		LOOP
 		IF r.user_permission = 1 THEN
-            RAISE NOTICE '4';
 		    BEGIN
-		        RAISE NOTICE '4';
     			INSERT INTO ref_account_project(id_account, id_project, user_state) VALUES (v_invited_index,v_project_index,r.user_state);
 			EXCEPTION
 		        WHEN
 		            SQLSTATE '23505' THEN
-		                return_code := -102;
+		                tb_code := -102;
     		END;
-                RAISE NOTICE '3';
+
+		    tb_project_id := v_project_index;
+		    tb_code := 0;
 		ELSE
-            RAISE NOTICE '99';
-			return_code := 510;
+			tb_code := 510;
 		END IF;
 		END LOOP;
 
         IF r IS NULL THEN
-            return_code := -101;
+            tb_code := -101;
         END IF;
 	ELSE
-		return_code := 511;
+		tb_code := 511;
 	END IF;
 
-    RETURN return_code;
+    RETURN NEXT;
 END; $BODY$;
-

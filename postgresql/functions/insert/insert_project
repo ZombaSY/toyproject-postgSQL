@@ -7,7 +7,8 @@ create or replace function createprojectsession(
 
     returns TABLE(
         tb_code integer,
-        tb_project_key TEXT)
+        tb_project_key text,
+        tb_project_id INTEGER)
     language plpgsql
 as
 $$
@@ -51,8 +52,10 @@ BEGIN
 					INSERT INTO public.ref_account_project(id_account,id_project, user_permission)
 													VALUES (arg_account_index,cur_project_id, 1);
 				END IF;
+
 				tb_code := 0;
 			    tb_project_key := v_random_string;
+			    tb_project_id := cur_project_id;
 
 				RETURN NEXT;
 
@@ -71,3 +74,5 @@ BEGIN
 	END IF;
 END;
 $$;
+
+

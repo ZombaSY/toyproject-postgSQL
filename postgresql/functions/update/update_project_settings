@@ -4,7 +4,9 @@ CREATE OR REPLACE FUNCTION public.update_project_settings(
 	arg_project_visibility INTEGER,
 	arg_project_name TEXT,
 	arg_project_description TEXT)
-    RETURNS INTEGER
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_project_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -33,8 +35,8 @@ BEGIN
 
             EXCEPTION
                 WHEN SQLSTATE '23505' THEN
-                    return_code := 100;
-                    RETURN return_code;
+                    tb_code := 100;
+                    RETURN NEXT;
         END;
 
 		CASE arg_project_visibility
@@ -43,8 +45,8 @@ BEGIN
 			WHEN 1 THEN
 			    v_user_state := 1;
 			ELSE
-			    return_code := -101;    -- Invalid visibility parameter --
-			    RETURN return_code;
+			    tb_code := -101;    -- Invalid visibility parameter --
+			    RETURN NEXT;
 		END CASE;
 
 		-- Change user_state who already belonged to projects --
@@ -53,17 +55,13 @@ BEGIN
 			WHERE id_project = v_project_index;
 
 		return_code := 0;
-		RETURN return_code;
+
+        tb_code = return_code;
+        tb_project_id = v_project_index;
+		RETURN NEXT;
 	ELSE
-		return_code := -100;	-- Permission Denied --
-		RETURN return_code;
+		tb_code := -100;	-- Permission Denied --
+		RETURN NEXT;
 	END IF;
 END;
 $BODY$;
-
-SELECT * FROM public.update_project_settings(
-    1,
-    'yqmosvsohh47s41s',
-    0,
-    '1',
-    'boom');

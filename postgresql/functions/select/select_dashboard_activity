@@ -1,0 +1,72 @@
+CREATE OR REPLACE FUNCTION public.select_dashboard_experiments(
+    arg_account_index INTEGER,
+    arg_workspace_key TEXT,
+    arg_activity_index BIGINT)
+
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_account_name VARCHAR(32),
+        tb_activity_command INTEGER,
+        tb_activity_data TEXT,
+        tb_activity_timestamp TIMESTAMP,
+        tb_activity_index BIGINT)
+
+AS
+$$
+DECLARE
+    r RECORD;
+    v_query BOOLEAN;
+    v_visible_project_id INTEGER[];
+    MAXIMUM_ROW INTEGER := 100;
+BEGIN
+    FOR r IN
+	    (SELECT project.visibility, project.id FROM public.project
+            INNER JOIN public.ref_account_workspace ON project.belonged_workspace_id = ref_account_workspace.id_workspace
+            INNER JOIN public.workspace ON workspace.id = ref_account_workspace.id_workspace
+			WHERE ref_account_workspace.id_account = arg_account_index AND
+			      workspace.access_key = arg_workspace_key)
+	LOOP
+        CASE r.visibility
+
+            WHEN 0 THEN -- public project --
+                v_visible_project_id := array_append(v_visible_project_id, r.id);
+
+            WHEN 1 THEN -- private project --
+                v_query := (SELECT is_available_private_project FROM public.is_available_private_project(
+                    r.id,arg_account_index));
+
+                IF v_query IS TRUE THEN -- visible project --
+
+                    v_visible_project_id := array_append(v_visible_project_id, r.id);
+                    tb_code := 0;
+                END IF;
+
+        END CASE;
+	END LOOP;
+
+    RETURN QUERY (SELECT tb_code,
+                         account.account_name,
+                         dashboard_activity.activity_command,
+                         dashboard_activity.data,
+                         dashboard_activity.timestamp,
+                         public.dashboard_activity.index
+                    FROM public.dashboard_activity
+                    INNER JOIN public.account ON account.id = dashboard_activity.account_index
+                    WHERE dashboard_activity.index < arg_activity_index
+                    ORDER BY timestamp DESC LIMIT MAXIMUM_ROW);
+
+END;
+$$
+
+LANGUAGE 'plpgsql';
+
+SELECT * FROM public.select_dashboard_experiments(8, 'aaaaaaaaaa5', 9999);
+
+SELECT  0,
+       account.account_name,
+        dashboard_activity.activity_command,
+        dashboard_activity.data,
+        dashboard_activity.timestamp,
+        dashboard_activity.index
+    FROM public.dashboard_activity
+    INNER JOIN public.account ON account.id = dashboard_activity.account_index;

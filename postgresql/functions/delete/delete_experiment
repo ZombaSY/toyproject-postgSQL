@@ -2,11 +2,14 @@ CREATE OR REPLACE FUNCTION public.delete_experiments(
 	arg_account_index INTEGER,
 	arg_workspace_index_key TEXT,
 	arg_experiment_indices_key TEXT[],
+	arg_project_index_key TEXT,
 	ignore_permission BOOLEAN)
     RETURNS TABLE(
         tb_code INTEGER,
         tb_container_name TEXT,
-        tb_cloud_path TEXT)
+        tb_cloud_path TEXT,
+        tb_experiment_name TEXT,
+        tb_project_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -25,16 +28,22 @@ DECLARE
 BEGIN
     v_workspace_index :=
         (SELECT id FROM public.workspace WHERE access_key = arg_workspace_index_key);
-    v_experiment_indices :=
-                    (SELECT array_agg(id) FROM public.experiment
-                        WHERE access_key = ANY(arg_experiment_indices_key));
+
+    SELECT array_agg(id), array_agg(name) FROM public.experiment
+        WHERE access_key = ANY(arg_experiment_indices_key)
+        INTO v_experiment_indices, tb_experiment_name;
+
+    -- return project id to log activity --
+    SELECT id FROM public.project
+        WHERE access_key = arg_project_index_key
+        INTO tb_project_id;
 
     ------------------------- Called from external function -------------------------
     IF ignore_permission = FALSE THEN
 
         -- Check has permission --
         check_query :=
-            (SELECT id FROM public.experiment
+            (SELECT experiment.id FROM public.experiment
                 INNER JOIN public.ref_account_project ON public.ref_account_project.id_project = public.experiment.belonged_project_id
                 WHERE public.experiment.id = ANY(v_experiment_indices) AND
                       user_permission = 1 AND
@@ -124,12 +133,8 @@ BEGIN
         tb_code := 0;
         tb_cloud_path := v_cloud_paths;
         tb_container_name := v_container_name;
+
         RETURN NEXT;
     END IF;
 END;
 $BODY$;
-
-
-SELECT * FROM public.ref_account_project
-    INNER JOIN public.project ON public.project.id = public.ref_account_project.id_project
-    WHERE id_account = 8 AND belonged_workspace_id = 4

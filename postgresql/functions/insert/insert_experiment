@@ -7,7 +7,9 @@ CREATE OR REPLACE FUNCTION createexperiment(
     RETURNS TABLE(
         experiment_id_key CHARACTER,
         project_id_key TEXT,
-        workspace_id_key TEXT)
+        workspace_id_key TEXT,
+        project_id INTEGER,
+        account_id INTEGER)
     LANGUAGE plpgsql
 as
 $$
@@ -65,12 +67,13 @@ BEGIN
 
 		project_id_key := var_project_access_key;
 		experiment_id_key := v_random_string;
+	    project_id := var_project_id;
+	    account_id := var_account_index;
 
 		RETURN NEXT;
 	END IF;
 END;
 $$;
-
 
 -- @@@@@@@@@@@@@@@@@@ Auto DIGO overloading @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ --
 
@@ -85,7 +88,9 @@ create function createexperiment(
     RETURNS TABLE(
         experiment_id_key CHARACTER,
         project_id_key TEXT,
-        workspace_id_key TEXT)
+        workspace_id_key TEXT,
+        project_id INTEGER,
+        account_id INTEGER)
     language plpgsql
 as
 $$
@@ -140,6 +145,8 @@ BEGIN
 
 		project_id_key := var_project_access_key;
 		experiment_id_key := v_random_string;
+	    project_id := var_project_id;
+	    account_id := var_account_index;
 
 		RETURN NEXT;
 	END IF;
