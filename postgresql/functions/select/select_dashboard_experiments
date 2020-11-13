@@ -1,6 +1,7 @@
 CREATE OR REPLACE FUNCTION public.select_dashboard_experiments(
     arg_account_index INTEGER,
-    arg_workspace_key TEXT)
+    arg_workspace_key TEXT,
+    arg_tab_code INTEGER)
 
     RETURNS TABLE(
         tb_code INTEGER,
@@ -17,6 +18,16 @@ DECLARE
     r RECORD;
     v_query BOOLEAN;
 BEGIN
+
+    IF arg_tab_code = 0 THEN    -- "MY" tab --
+
+    ELSE IF arg_tab_code = 1 THEN   -- "RUNNING" tab
+
+    ELSE IF arg_tab_code = 2 THEN   -- "RECENT" tab
+
+    END IF;
+
+
     FOR r IN
 	    (SELECT project.visibility, project.id FROM public.project
             INNER JOIN public.ref_account_workspace ON project.belonged_workspace_id = ref_account_workspace.id_workspace
@@ -44,26 +55,9 @@ BEGIN
 
         END CASE;
 
-		IF return_code = 0 THEN     -- if visible project in workspace --
-
-            SELECT experiment.name, account.account_name, experiment.experiment_state, experiment.created_date
-                FROM public.experiment
-                INNER JOIN public.account ON public.account.id = public.experiment.creator
-                WHERE belonged_project_id = r.id
-		        INTO tb_experiment_name, tb_experiment_creator_name, tb_experiment_status, tb_experiment_created_date;
-
-            RETURN NEXT;
-        END IF;
+    RETURN NEXT;
 	END LOOP;
 END;
 $$
 
 LANGUAGE 'plpgsql';
-
-SELECT project.visibility, project.id FROM public.project
-    INNER JOIN public.ref_account_workspace ON project.belonged_workspace_id = ref_account_workspace.id_workspace
-    INNER JOIN public.workspace ON workspace.id = ref_account_workspace.id_workspace
-    WHERE ref_account_workspace.id_account = 8 AND
-          workspace.access_key = 'aaaaaaaaaa5';
-
-SELECT * FROM public.select_dashboard_experiments(8, 'aaaaaaaaaa5');
