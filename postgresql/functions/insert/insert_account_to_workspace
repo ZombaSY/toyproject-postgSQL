@@ -83,7 +83,7 @@ AS $BODY$
 DECLARE
     var_account_permission INTEGER;
     var_invited_account_index INTEGER;
-	return_code INTEGER;
+	return_code INTEGER := 0;
 BEGIN
     var_account_permission :=
         (SELECT account_permission FROM public.ref_account_workspace
@@ -112,15 +112,12 @@ BEGIN
             END;
         ELSE
             return_code := -103;    -- No email in account table --
-            RETURN return_code;
         END IF;
 
     ELSE
         return_code := -102;    -- Permission denied --
-        RETURN return_code;
     END IF;
 
-	return_code := 0;
 	RETURN return_code;
 END;
 $BODY$;

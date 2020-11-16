@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION public.select_dashboard_experiments(
+CREATE OR REPLACE FUNCTION public.select_dashboard_activity(
     arg_account_index INTEGER,
     arg_workspace_key TEXT,
     arg_activity_index BIGINT)
@@ -38,24 +38,38 @@ BEGIN
                 IF v_query IS TRUE THEN -- visible project --
 
                     v_visible_project_ids := array_append(v_visible_project_ids, r.id); -- append visible project_index
-                    tb_code := 0;
                 END IF;
 
         END CASE;
 	END LOOP;
 
-    RETURN QUERY (SELECT tb_code,
-                         account.account_name,
-                         dashboard_activity.activity_command,
-                         dashboard_activity.data,
-                         dashboard_activity.timestamp,
-                         public.dashboard_activity.index
-                    FROM public.dashboard_activity
-                    INNER JOIN public.account ON account.id = dashboard_activity.account_index
-                    WHERE dashboard_activity.index < arg_activity_index AND
-                          public.dashboard_activity.project_index = ANY(v_visible_project_ids)
-                    ORDER BY timestamp DESC LIMIT MAXIMUM_ROW);
+    IF arg_activity_index = 0 THEN  -- first call from web
+        RETURN QUERY (
+            SELECT 0,
+                   account.account_name,
+                   dashboard_activity.activity_command,
+                   dashboard_activity.data,
+                   dashboard_activity.timestamp,
+                   public.dashboard_activity.index
+                FROM public.dashboard_activity
+                INNER JOIN public.account ON account.id = dashboard_activity.account_index
+                WHERE public.dashboard_activity.project_index = ANY(v_visible_project_ids)
+                ORDER BY timestamp DESC LIMIT MAXIMUM_ROW);
 
+    ELSE    -- second or more call from web
+        RETURN QUERY (
+            SELECT 0,
+                   account.account_name,
+                   dashboard_activity.activity_command,
+                   dashboard_activity.data,
+                   dashboard_activity.timestamp,
+                   public.dashboard_activity.index
+                FROM public.dashboard_activity
+                INNER JOIN public.account ON account.id = dashboard_activity.account_index
+                WHERE dashboard_activity.index < arg_activity_index AND
+                      public.dashboard_activity.project_index = ANY(v_visible_project_ids)
+                ORDER BY timestamp DESC LIMIT MAXIMUM_ROW);
+    END IF;
 END;
 $$
 

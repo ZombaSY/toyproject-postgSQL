@@ -5,58 +5,110 @@ CREATE OR REPLACE FUNCTION public.select_dashboard_experiments(
 
     RETURNS TABLE(
         tb_code INTEGER,
-        tb_project_name TEXT,
-        tb_experiment_name TEXT,
-        tb_experiment_creator_name TEXT,
-        tb_experiment_status INTEGER,
-        tb_experiment_created_date TIMESTAMP)
+        tb_project_name CHAR VARYING(32),
+        tb_experiment_name CHAR VARYING(32),
+        tb_experiment_creator_name CHAR VARYING(32),
+        tb_experiment_status SMALLINT,
+        tb_experiment_created_date TIMESTAMP,
+        tb_experiment_key TEXT)
 
 AS
 $$
 DECLARE
-    return_code INTEGER;
     r RECORD;
     v_query BOOLEAN;
+    v_visible_project_ids INTEGER[];
 BEGIN
 
-    IF arg_tab_code = 0 THEN    -- "MY" tab --
+    IF arg_tab_code = 1001 THEN    -- "MY" tab --
 
-    ELSE IF arg_tab_code = 1 THEN   -- "RUNNING" tab
+        RETURN QUERY(
+            SELECT 0,
+                   public.project.name,
+                   public.experiment.name,
+                   public.account.account_name,
+                   public.experiment.experiment_state,
+                   public.experiment.created_date,
+                   public.experiment.access_key
+            FROM public.experiment
+            INNER JOIN public.account ON experiment.creator = account.id
+            INNER JOIN public.project ON project.id = experiment.belonged_project_id
+            INNER JOIN public.workspace ON workspace.id = project.belonged_workspace_id
+            WHERE public.experiment.creator = arg_account_index AND
+                  public.workspace.access_key = arg_workspace_key
+            ORDER BY public.experiment.created_date DESC
+            LIMIT 100);
 
-    ELSE IF arg_tab_code = 2 THEN   -- "RECENT" tab
+    ELSEIF (arg_tab_code = 1002 OR arg_tab_code = 1003) THEN   -- "RUNNING" tab or "RECENT" tab
 
+        FOR r IN
+            (SELECT project.visibility, project.id FROM public.project
+                INNER JOIN public.ref_account_workspace ON project.belonged_workspace_id = ref_account_workspace.id_workspace
+                INNER JOIN public.workspace ON workspace.id = ref_account_workspace.id_workspace
+                WHERE ref_account_workspace.id_account = arg_account_index AND
+                      workspace.access_key = arg_workspace_key)
+        LOOP
+            CASE r.visibility
+
+                WHEN 0 THEN -- public project --
+                    v_visible_project_ids := array_append(v_visible_project_ids, r.id); -- append visible project_index
+
+                WHEN 1 THEN -- private project --
+                    v_query := (SELECT is_available_private_project FROM public.is_available_private_project(
+                        r.id,arg_account_index));
+
+                    IF v_query IS TRUE THEN -- visible private project --
+                        v_visible_project_ids := array_append(v_visible_project_ids, r.id); -- append visible project_index
+                    END IF;
+
+            END CASE;
+        END LOOP;
+
+        IF arg_tab_code = 1002 THEN   -- "RUNNING" tab
+
+            RETURN QUERY (
+                SELECT 0,
+                       public.project.name,
+                       public.experiment.name,
+                       public.account.account_name,
+                       public.experiment.experiment_state,
+                       public.experiment.created_date,
+                       public.experiment.access_key
+                    FROM public.experiment
+                    INNER JOIN public.account ON experiment.creator = account.id
+                    INNER JOIN public.project ON project.id = experiment.belonged_project_id
+                    INNER JOIN public.workspace ON workspace.id = project.belonged_workspace_id
+                    WHERE public.workspace.access_key = arg_workspace_key AND
+                          public.experiment.experiment_state = 0 AND
+                          public.experiment.belonged_project_id = ANY(v_visible_project_ids)
+                    ORDER BY public.experiment.created_date DESC
+                    LIMIT 100);
+
+        ELSEIF arg_tab_code = 1003 THEN   -- "RECENT" tab
+
+            RETURN QUERY (
+                SELECT 0,
+                       public.project.name,
+                       public.experiment.name,
+                       public.account.account_name,
+                       public.experiment.experiment_state,
+                       public.experiment.created_date,
+                       public.experiment.access_key
+                    FROM public.experiment
+                    INNER JOIN public.account ON experiment.creator = account.id
+                    INNER JOIN public.project ON project.id = experiment.belonged_project_id
+                    INNER JOIN public.workspace ON workspace.id = project.belonged_workspace_id
+                    WHERE public.workspace.access_key = arg_workspace_key AND
+                          public.experiment.belonged_project_id = ANY(v_visible_project_ids)
+                    ORDER BY public.experiment.created_date DESC
+                    LIMIT 100);
+
+        END IF;
+
+    ELSE   -- undefined tab
+        tb_code := -200;
+        RETURN NEXT;
     END IF;
-
-
-    FOR r IN
-	    (SELECT project.visibility, project.id FROM public.project
-            INNER JOIN public.ref_account_workspace ON project.belonged_workspace_id = ref_account_workspace.id_workspace
-            INNER JOIN public.workspace ON workspace.id = ref_account_workspace.id_workspace
-			WHERE ref_account_workspace.id_account = arg_account_index AND
-			      workspace.access_key = arg_workspace_key)
-	LOOP
-        CASE r.visibility
-
-            WHEN 0 THEN -- public project --
-                return_code := 0;
-
-            WHEN 1 THEN -- private project --
-                v_query := (SELECT is_available_private_project FROM public.is_available_private_project(
-                    r.id,arg_account_index));
-
-                IF v_query IS TRUE THEN
-                    return_code := 0;
-                ELSE
-                    return_code := -1;  -- not belonged to private project --
-                END IF;
-
-            ELSE    -- not belonged to private project --
-                return_code := -100; -- unknown visibility --
-
-        END CASE;
-
-    RETURN NEXT;
-	END LOOP;
 END;
 $$
 
