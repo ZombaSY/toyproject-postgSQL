@@ -3,7 +3,12 @@ CREATE OR REPLACE FUNCTION public.update_experiment_state(
 	arg_account_id CHARACTER,
 	arg_experiment_id CHARACTER,
 	arg_experiment_state INTEGER)
-    RETURNS INTEGER
+
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_project_name TEXT,
+        tb_experiment_creator TEXT)
+
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -12,12 +17,44 @@ CREATE OR REPLACE FUNCTION public.update_experiment_state(
 AS $BODY$
 DECLARE
 	is_available boolean;
+    v_project_name TEXT;
+    v_experiment_creator TEXT;
 BEGIN
 	is_available :=(SELECT * FROM public.is_available_apikey(arg_api_key,arg_account_id));
+
 	IF is_available IS TRUE THEN
-		UPDATE public.experiment SET experiment_state = arg_experiment_state WHERE access_key = arg_experiment_id;
-		RETURN 0;
+        UPDATE public.experiment
+            SET experiment_state = arg_experiment_state
+            FROM public.account, public.project
+            WHERE experiment.access_key = arg_experiment_id
+            RETURNING project.name, account.account_name
+            INTO v_project_name, v_experiment_creator;
+
+		tb_code := 0;
+            IF v_project_name IS NOT NULL THEN
+                tb_project_name := v_project_name;
+                tb_experiment_creator = v_experiment_creator;
+            ELSE
+                tb_code := -201;
+            END IF;
+
+        RETURN NEXT;
 	ELSE
-		RETURN 125;
+	    tb_code := 125;
+		RETURN NEXT;
 	END IF;
 END;$BODY$;
+
+SELECT * FROM update_experiment_state(
+    'qpqD6cHYvGG2XNHeGlHog8360T8uWHya',
+    'tjxhwl@gmail.com',
+    'ps9o933xvvftqlqt',
+    1);
+
+UPDATE public.experiment
+    SET experiment_state = 0
+    FROM public.account, public.project
+    WHERE experiment.access_key = 'ps9o933xvvftqlqt'
+    RETURNING project.name, account.account_name;
+
+SELECT * FROM public.api_key;
