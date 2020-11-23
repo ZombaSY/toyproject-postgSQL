@@ -1,0 +1,68 @@
+CREATE OR REPLACE FUNCTION public.update_experiment_finished_date(
+	arg_api_key CHARACTER,
+	arg_account_id CHARACTER,
+	arg_experiment_id CHARACTER,
+	arg_experiment_state INTEGER)
+
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_project_name TEXT,
+        tb_project_id INTEGER,
+        tb_experiment_name TEXT,
+        tb_experiment_creator_id BIGINT)
+
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+	is_available boolean;
+    v_project_name TEXT;
+    v_project_id INTEGER;
+    v_experiment_name TEXT;
+    v_experiment_creator_id BIGINT;
+BEGIN
+	is_available :=(SELECT * FROM public.is_available_apikey(arg_api_key,arg_account_id));
+
+	IF is_available IS TRUE THEN
+        UPDATE public.experiment
+            SET experiment_state = arg_experiment_state
+            FROM public.account, public.project
+            WHERE experiment.access_key = arg_experiment_id
+            RETURNING project.name, experiment.belonged_project_id, experiment.name, account.id
+            INTO v_project_name, v_project_id, v_experiment_name, v_experiment_creator_id;
+
+		tb_code := 0;
+            IF v_project_name IS NOT NULL THEN
+                tb_project_name := v_project_name;
+                tb_project_id := v_project_id;
+                tb_experiment_name := v_experiment_name;
+                tb_experiment_creator_id := v_experiment_creator_id;
+
+            ELSE
+                tb_code := -201;
+            END IF;
+
+        RETURN NEXT;
+	ELSE
+	    tb_code := 125;
+		RETURN NEXT;
+	END IF;
+END;$BODY$;
+
+UPDATE public.experiment
+    SET experiment_state = 0
+    FROM public.account, public.project
+    WHERE experiment.access_key = 'jibe7tn83erh1hqm'
+    RETURNING project.name, experiment.belonged_project_id, experiment.name, account.id;
+
+UPDATE public.experiment
+    SET experiment_state = 0
+    FROM public.account, public.project
+    WHERE experiment.access_key = 'jibe7tn83erh1hqm'
+    RETURNING *;
+
+SELECT * FROM public.experiment
+    ORDER BY id DESC;

@@ -29,6 +29,7 @@ BEGIN
         CASE r.visibility
 
             WHEN 0 THEN -- public project --
+                RAISE NOTICE 'public: %', r.id;
                 v_visible_project_ids := array_append(v_visible_project_ids, r.id); -- append visible project_index
 
             WHEN 1 THEN -- private project --
@@ -36,7 +37,7 @@ BEGIN
                     r.id,arg_account_index));
 
                 IF v_query IS TRUE THEN -- visible project --
-
+                    RAISE NOTICE 'private: %', r.id;
                     v_visible_project_ids := array_append(v_visible_project_ids, r.id); -- append visible project_index
                 END IF;
 
