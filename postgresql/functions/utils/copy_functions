@@ -1,0 +1,1251 @@
+DROP FUNCTION PUBLIC.select_file_unique_path;
+DROP FUNCTION PUBLIC.select_dashboard_activity;
+DROP FUNCTION PUBLIC.select_dashboard_experiments;
+DROP FUNCTION PUBLIC.inviteproject;
+DROP FUNCTION PUBLIC.createprojectsession;
+DROP FUNCTION PUBLIC.createexperiment;	-- overloading
+DROP FUNCTION PUBLIC.createworkspace;
+DROP FUNCTION PUBLIC.insert_account_to_workspace;	-- overloading
+DROP FUNCTION PUBLIC.delete_experiments;
+DROP FUNCTION PUBLIC.delete_project;
+DROP FUNCTION PUBLIC.update_project_account_permission;
+DROP FUNCTION PUBLIC.update_project_settings;
+DROP FUNCTION PUBLIC.update_experiment_state;
+DROP FUNCTION PUBLIC.update_experiment_finished_date;
+
+CREATE OR REPLACE FUNCTION public.select_file_unique_path(
+	arg_api_key TEXT,
+	arg_email_address TEXT,
+	arg_workspace_name TEXT,
+	arg_project_name TEXT,
+	arg_experiment_name TEXT)
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_workspace_key TEXT,
+        tb_project_key TEXT,
+        tb_experiment_key TEXT)
+
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+
+BEGIN
+
+    SELECT  public.workspace.access_key,
+            public.project.access_key,
+            public.experiment.access_key
+                FROM public.workspace
+            LEFT JOIN public.project ON public.project.belonged_workspace_id = public.workspace.id
+            LEFT JOIN public.experiment ON public.experiment.belonged_project_id = public.project.id
+            LEFT JOIN public.ref_account_workspace ON public.ref_account_workspace.id_workspace = public.workspace.id
+            LEFT JOIN public.account ON public.ref_account_workspace.id_account = public.account.id
+            LEFT JOIN api_key ON public.api_key.account_id = public.account.account_id
+            WHERE public.api_key.api_key = arg_api_key AND
+                  public.account.account_id = arg_email_address AND
+                  public.workspace.name = arg_workspace_name AND
+                  public.project.name = arg_project_name AND
+                  public.experiment.name = arg_experiment_name
+            INTO tb_workspace_key,
+                 tb_project_key,
+                 tb_experiment_key;
+
+    IF tb_workspace_key IS NOT NULL THEN
+        tb_code := 0;
+    ELSE
+        tb_code := -400;    -- any keys are not found
+    END IF;
+
+    RETURN NEXT;
+
+END;
+$BODY$;
+
+
+
+
+CREATE OR REPLACE FUNCTION public.select_dashboard_activity(
+    arg_account_index INTEGER,
+    arg_workspace_key TEXT,
+    arg_activity_index BIGINT)
+
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_account_name VARCHAR(32),
+        tb_activity_command INTEGER,
+        tb_activity_data TEXT,
+        tb_activity_timestamp TIMESTAMP,
+        tb_activity_index BIGINT)
+
+AS
+$$
+DECLARE
+    r RECORD;
+    v_query BOOLEAN;
+    v_visible_project_ids INTEGER[];
+    MAXIMUM_ROW INTEGER := 100;
+BEGIN
+    FOR r IN
+	    (SELECT project.visibility, project.id FROM public.project
+            INNER JOIN public.ref_account_workspace ON project.belonged_workspace_id = ref_account_workspace.id_workspace
+            INNER JOIN public.workspace ON workspace.id = ref_account_workspace.id_workspace
+			WHERE ref_account_workspace.id_account = arg_account_index AND
+			      workspace.access_key = arg_workspace_key)
+	LOOP
+        CASE r.visibility
+
+            WHEN 0 THEN -- public project --
+                RAISE NOTICE 'public: %', r.id;
+                v_visible_project_ids := array_append(v_visible_project_ids, r.id); -- append visible project_index
+
+            WHEN 1 THEN -- private project --
+                v_query := (SELECT is_available_private_project FROM public.is_available_private_project(
+                    r.id,arg_account_index));
+
+                IF v_query IS TRUE THEN -- visible project --
+                    RAISE NOTICE 'private: %', r.id;
+                    v_visible_project_ids := array_append(v_visible_project_ids, r.id); -- append visible project_index
+                END IF;
+
+        END CASE;
+	END LOOP;
+
+    IF arg_activity_index = 0 THEN  -- first call from web
+        RETURN QUERY (
+            SELECT 0,
+                   account.account_name,
+                   dashboard_activity.activity_command,
+                   dashboard_activity.data,
+                   dashboard_activity.timestamp,
+                   public.dashboard_activity.index
+                FROM public.dashboard_activity
+                INNER JOIN public.account ON account.id = dashboard_activity.account_index
+                WHERE public.dashboard_activity.project_index = ANY(v_visible_project_ids)
+                ORDER BY timestamp DESC LIMIT MAXIMUM_ROW);
+
+    ELSE    -- second or more call from web
+        RETURN QUERY (
+            SELECT 0,
+                   account.account_name,
+                   dashboard_activity.activity_command,
+                   dashboard_activity.data,
+                   dashboard_activity.timestamp,
+                   public.dashboard_activity.index
+                FROM public.dashboard_activity
+                INNER JOIN public.account ON account.id = dashboard_activity.account_index
+                WHERE dashboard_activity.index < arg_activity_index AND
+                      public.dashboard_activity.project_index = ANY(v_visible_project_ids)
+                ORDER BY timestamp DESC LIMIT MAXIMUM_ROW);
+    END IF;
+END;
+$$
+
+LANGUAGE 'plpgsql';
+
+CREATE OR REPLACE FUNCTION public.select_dashboard_experiments(
+    arg_account_index INTEGER,
+    arg_workspace_key TEXT,
+    arg_tab_code INTEGER)
+
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_project_name CHAR VARYING(32),
+        tb_experiment_name CHAR VARYING(32),
+        tb_experiment_creator_name CHAR VARYING(32),
+        tb_experiment_status SMALLINT,
+        tb_experiment_created_date TIMESTAMP,
+        tb_experiment_key TEXT)
+
+AS
+$$
+DECLARE
+    r RECORD;
+    v_query BOOLEAN;
+    v_visible_project_ids INTEGER[];
+BEGIN
+
+    IF arg_tab_code = 1001 THEN    -- "MY" tab --
+
+        RETURN QUERY(
+            SELECT 0,
+                   public.project.name,
+                   public.experiment.name,
+                   public.account.account_name,
+                   public.experiment.experiment_state,
+                   public.experiment.created_date,
+                   public.experiment.access_key
+            FROM public.experiment
+            INNER JOIN public.account ON experiment.creator = account.id
+            INNER JOIN public.project ON project.id = experiment.belonged_project_id
+            INNER JOIN public.workspace ON workspace.id = project.belonged_workspace_id
+            WHERE public.experiment.creator = arg_account_index AND
+                  public.workspace.access_key = arg_workspace_key
+            ORDER BY public.experiment.created_date DESC
+            LIMIT 100);
+
+    ELSEIF (arg_tab_code = 1002 OR arg_tab_code = 1003) THEN   -- "RUNNING" tab or "RECENT" tab
+
+        FOR r IN
+            (SELECT project.visibility, project.id FROM public.project
+                INNER JOIN public.ref_account_workspace ON project.belonged_workspace_id = ref_account_workspace.id_workspace
+                INNER JOIN public.workspace ON workspace.id = ref_account_workspace.id_workspace
+                WHERE ref_account_workspace.id_account = arg_account_index AND
+                      workspace.access_key = arg_workspace_key)
+        LOOP
+            CASE r.visibility
+
+                WHEN 0 THEN -- public project --
+                    v_visible_project_ids := array_append(v_visible_project_ids, r.id); -- append visible project_index
+
+                WHEN 1 THEN -- private project --
+                    v_query := (SELECT is_available_private_project FROM public.is_available_private_project(
+                        r.id,arg_account_index));
+
+                    IF v_query IS TRUE THEN -- visible private project --
+                        v_visible_project_ids := array_append(v_visible_project_ids, r.id); -- append visible project_index
+                    END IF;
+
+            END CASE;
+        END LOOP;
+
+        IF arg_tab_code = 1002 THEN   -- "RUNNING" tab
+
+            RETURN QUERY (
+                SELECT 0,
+                       public.project.name,
+                       public.experiment.name,
+                       public.account.account_name,
+                       public.experiment.experiment_state,
+                       public.experiment.created_date,
+                       public.experiment.access_key
+                    FROM public.experiment
+                    INNER JOIN public.account ON experiment.creator = account.id
+                    INNER JOIN public.project ON project.id = experiment.belonged_project_id
+                    INNER JOIN public.workspace ON workspace.id = project.belonged_workspace_id
+                    WHERE public.workspace.access_key = arg_workspace_key AND
+                          public.experiment.experiment_state = 0 AND
+                          public.experiment.belonged_project_id = ANY(v_visible_project_ids)
+                    ORDER BY public.experiment.created_date DESC
+                    LIMIT 100);
+
+        ELSEIF arg_tab_code = 1003 THEN   -- "RECENT" tab
+
+            RETURN QUERY (
+                SELECT 0,
+                       public.project.name,
+                       public.experiment.name,
+                       public.account.account_name,
+                       public.experiment.experiment_state,
+                       public.experiment.created_date,
+                       public.experiment.access_key
+                    FROM public.experiment
+                    INNER JOIN public.account ON experiment.creator = account.id
+                    INNER JOIN public.project ON project.id = experiment.belonged_project_id
+                    INNER JOIN public.workspace ON workspace.id = project.belonged_workspace_id
+                    WHERE public.workspace.access_key = arg_workspace_key AND
+                          public.experiment.belonged_project_id = ANY(v_visible_project_ids)
+                    ORDER BY public.experiment.created_date DESC
+                    LIMIT 100);
+
+        END IF;
+
+    ELSE   -- undefined tab
+        tb_code := -200;
+        RETURN NEXT;
+    END IF;
+END;
+$$
+
+LANGUAGE 'plpgsql';
+
+CREATE OR REPLACE FUNCTION public.inviteproject(
+	arg_account_index INTEGER,
+	arg_invite_email TEXT,
+	arg_project_id TEXT,
+	arg_workspace_id_key TEXT)
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_project_id INTEGER)
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+    r RECORD;
+    check_query INTEGER:= -1;
+    v_project_index INTEGER;
+    v_workspace_index INTEGER;
+    v_invited_index INTEGER;
+BEGIN
+    v_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_workspace_id_key);
+    v_invited_index :=
+        (SELECT id FROM public.account
+            WHERE account_id = arg_invite_email);
+
+    IF v_invited_index IS NOT NULL THEN
+        check_query :=
+            (SELECT count(*) FROM public.ref_account_workspace WHERE id_workspace = v_workspace_index AND (id_account = arg_account_index OR id_account = v_invited_index));
+    ELSE
+        tb_code := -100;
+    END IF;
+
+	IF check_query = 2 THEN
+	    v_project_index :=
+	        (SELECT id FROM public.project
+	            WHERE access_key = arg_project_id);
+
+		FOR r IN(select * from public.ref_account_project
+					   where id_account = arg_account_index and id_project = v_project_index)
+		LOOP
+		IF r.user_permission = 1 THEN
+		    BEGIN
+    			INSERT INTO ref_account_project(id_account, id_project, user_state) VALUES (v_invited_index,v_project_index,r.user_state);
+			EXCEPTION
+		        WHEN
+		            SQLSTATE '23505' THEN
+		                tb_code := -102;
+    		END;
+
+		    tb_project_id := v_project_index;
+		    tb_code := 0;
+		ELSE
+			tb_code := 510;
+		END IF;
+		END LOOP;
+
+        IF r IS NULL THEN
+            tb_code := -101;
+        END IF;
+	ELSE
+		tb_code := 511;
+	END IF;
+
+    RETURN NEXT;
+END; $BODY$;
+
+create or replace function createprojectsession(
+    arg_account_index integer,
+    arg_project_name character,
+    arg_belonged_workspace_id_key text,
+    arg_description character,
+    arg_visibility integer)
+
+    returns TABLE(
+        tb_code integer,
+        tb_project_key text,
+        tb_project_id INTEGER)
+    language plpgsql
+as
+$$
+DECLARE
+	check_workspace BOOLEAN;
+	is_available_account BOOLEAN;
+	cur_project_id INTEGER;
+    v_random_string TEXT;
+    is_available_access_key BOOLEAN;
+    v_workspace_index INTEGER;
+BEGIN
+	is_available_account := (SELECT * FROM public.is_available_accountsession(arg_account_index));
+
+	IF is_available_account IS TRUE THEN
+	    v_workspace_index :=
+	        (SELECT id FROM public.workspace WHERE access_key = arg_belonged_workspace_id_key);
+		check_workspace := (SELECT * FROM public.is_available_ref_account_workspace(arg_account_index, v_workspace_index));
+		IF check_workspace IS TRUE THEN
+			BEGIN
+			     -- Generate unique access key --
+                WHILE is_available_access_key IS NOT TRUE
+                LOOP
+                    v_random_string := (SELECT * FROM public.generate_random_string(16));
+                    IF v_random_string IN
+                        (SELECT access_key FROM public.project) THEN
+                        RAISE NOTICE 'access key is already in DB. Generate again.';
+                    ELSE
+                        is_available_access_key := TRUE;
+                    END IF;
+                END LOOP;
+
+			     -- Create Project --
+				INSERT INTO public.project(
+					name, belonged_workspace_id, description, creator_id, administrator_id, visibility, access_key)
+					VALUES (arg_project_name, v_workspace_index, arg_description, arg_account_index, arg_account_index, arg_visibility, v_random_string)
+					RETURNING id INTO cur_project_id;
+				IF arg_visibility != 0 THEN
+					INSERT INTO public.ref_account_project(id_account,id_project,user_state, user_permission)
+													VALUES (arg_account_index,cur_project_id,1, 1);
+				ELSE
+					INSERT INTO public.ref_account_project(id_account,id_project, user_permission)
+													VALUES (arg_account_index,cur_project_id, 1);
+				END IF;
+
+				tb_code := 0;
+			    tb_project_key := v_random_string;
+			    tb_project_id := cur_project_id;
+
+				RETURN NEXT;
+
+				EXCEPTION
+					WHEN SQLSTATE '23505' THEN
+						tb_code := -102;
+						RETURN NEXT;
+			END;
+		ELSE
+			tb_code := -101;
+			RETURN NEXT;
+		END IF;
+	ELSE
+		tb_code := -100;
+		RETURN NEXT;
+	END IF;
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION createexperiment(
+    arg_api_key CHARACTER,
+    arg_account_id CHARACTER,
+    arg_workspace_name CHARACTER,
+    arg_project_name CHARACTER,
+    arg_experiment_name CHARACTER)
+    RETURNS TABLE(
+        experiment_id_key CHARACTER,
+        project_id_key TEXT,
+        workspace_id_key TEXT,
+        project_id INTEGER,
+        account_id INTEGER)
+    LANGUAGE plpgsql
+as
+$$
+DECLARE
+	var_project_id INTEGER;
+    var_project_access_key TEXT;
+	temp_experiment_id INTEGER;
+	var_account_index INTEGER;
+    v_random_string TEXT;
+    is_available_access_key BOOL := FALSE;
+BEGIN
+
+	SELECT DISTINCT public.project.id,
+                    public.account.id,
+                    public.project.access_key,
+	                public.workspace.access_key
+                        FROM public.account
+		LEFT JOIN public.api_key ON public.api_key.account_id = public.account.account_id
+		LEFT JOIN public.workspace ON public.workspace.name = arg_workspace_name
+		LEFT JOIN public.project ON public.project.belonged_workspace_id = public.workspace.id
+		WHERE public.api_key.api_key = arg_api_key AND
+		      public.project.name = arg_project_name AND
+		      public.account.account_id = arg_account_id
+	    INTO var_project_id, var_account_index, var_project_access_key, workspace_id_key;
+
+
+	IF var_project_id IS NULL THEN
+		RAISE WARNING 'Project does not found!!!';
+	ELSE
+
+	    -- Generate unique access key --
+	    WHILE is_available_access_key IS NOT TRUE
+        LOOP
+	        v_random_string := (SELECT * FROM public.generate_random_string(16));
+            IF v_random_string IN
+                (SELECT access_key FROM public.experiment) THEN
+                RAISE NOTICE 'access key is already in DB. Generate again.';
+            ELSE
+                is_available_access_key := TRUE;
+            END IF;
+        END LOOP;
+
+	    -- Create experiment --
+		INSERT INTO public.experiment(
+		                              name,
+		                              belonged_project_id,
+		                              creator,
+		                              access_key)
+            VALUES (
+                    arg_experiment_name,
+                    var_project_id,
+                    var_account_index,
+                    v_random_string)
+		RETURNING experiment.id INTO temp_experiment_id;
+
+		project_id_key := var_project_access_key;
+		experiment_id_key := v_random_string;
+	    project_id := var_project_id;
+	    account_id := var_account_index;
+
+		RETURN NEXT;
+	END IF;
+END;
+$$;
+
+-- @@@@@@@@@@@@@@@@@@ Auto DIGO overloading @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ --
+
+create function createexperiment(
+    arg_api_key character,
+    arg_account_id character,
+    arg_workspace_name character,
+    arg_project_name character,
+    arg_experiment_name character,
+    arg_auto_digo_id bigint)
+
+    RETURNS TABLE(
+        experiment_id_key CHARACTER,
+        project_id_key TEXT,
+        workspace_id_key TEXT,
+        project_id INTEGER,
+        account_id INTEGER)
+    language plpgsql
+as
+$$
+DECLARE
+	var_project_id INTEGER;
+    var_project_access_key TEXT;
+	temp_experiment_id INTEGER;
+	var_account_index INTEGER;
+    v_random_string TEXT;
+    is_available_access_key BOOL := FALSE;
+BEGIN
+
+	SELECT DISTINCT public.project.id,
+                    public.account.id,
+                    public.project.access_key,
+	                public.workspace.access_key
+                        FROM public.account
+		LEFT JOIN public.api_key ON public.api_key.account_id = public.account.account_id
+		LEFT JOIN public.workspace ON public.workspace.name = arg_workspace_name
+		LEFT JOIN public.project ON public.project.belonged_workspace_id = public.workspace.id
+		WHERE public.api_key.api_key = arg_api_key AND
+		      public.project.name = arg_project_name AND
+		      public.account.account_id = arg_account_id
+	    INTO var_project_id, var_account_index, var_project_access_key, workspace_id_key;
+
+
+	IF var_project_id IS NULL THEN
+		RAISE WARNING 'Project does not found!!!';
+	ELSE
+
+	    -- Generate unique access key --
+	    WHILE is_available_access_key IS NOT TRUE
+        LOOP
+	        v_random_string := (SELECT * FROM public.generate_random_string(16));
+            IF v_random_string IN
+                (SELECT access_key FROM public.experiment) THEN
+                RAISE NOTICE 'access key is already in DB. Generate again.';
+            ELSE
+                is_available_access_key := TRUE;
+            END IF;
+        END LOOP;
+
+	    -- Create experiment --
+		INSERT INTO public.experiment (name, belonged_project_id, creator, access_key, auto_digo_id)
+		VALUES (
+		        arg_experiment_name,
+		        var_project_id,
+		        var_account_index,
+		        v_random_string,
+		        arg_auto_digo_id)
+		RETURNING experiment.id INTO temp_experiment_id;
+
+		project_id_key := var_project_access_key;
+		experiment_id_key := v_random_string;
+	    project_id := var_project_id;
+	    account_id := var_account_index;
+
+		RETURN NEXT;
+	END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION createworkspace(
+    arg_account_index INTEGER,
+    arg_workspace_name CHARACTER VARYING,
+    arg_visibility INTEGER,
+    arg_account_permission INTEGER)
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_workspace_index_key TEXT)
+    language plpgsql
+as
+$$
+DECLARE
+	cur_id_workspace INTEGER;
+	cur_id_account INTEGER;
+	select_query INTEGER;
+	check_name CHARACTER varying(32);
+    is_available_access_key BOOL;
+    v_random_string TEXT;
+BEGIN
+
+    -- TODO: check api_key to confirm creator's license
+
+	select_query := (SELECT id FROM public.account
+					 	WHERE id = arg_account_index);
+
+	IF select_query is NULL THEN
+		tb_code := 123;
+		RETURN NEXT;
+	ELSE
+
+		check_name := (SELECT name FROM public.workspace
+					   	INNER JOIN public.ref_account_workspace ON public.workspace.id = public.ref_account_workspace.id_workspace
+					   		WHERE public.ref_account_workspace.id_account = select_query AND
+					   		      public.workspace.visibility = arg_visibility AND
+					   		      public.workspace.name=arg_workspace_name);
+
+		IF check_name is NULL THEN
+
+            -- Generate unique access key --
+            WHILE is_available_access_key IS NOT TRUE
+            LOOP
+                v_random_string := (SELECT * FROM public.generate_random_string(16));
+                IF v_random_string IN
+                    (SELECT access_key FROM public.workspace) THEN
+                    RAISE NOTICE 'access key is already in DB. Generate again.';
+                ELSE
+                    is_available_access_key := TRUE;
+                END IF;
+            END LOOP;
+
+            -- Create workspace --
+			INSERT INTO public.workspace(name,visibility, admin_id, access_key)
+				VALUES (arg_workspace_name, arg_visibility, arg_account_index, v_random_string)
+				RETURNING id, access_key INTO cur_id_workspace, tb_workspace_index_key;
+
+            -- Update default workspace when created new workspace --
+			UPDATE public.account set default_workspace = cur_id_workspace
+				WHERE id = select_query
+			    RETURNING id INTO cur_id_account;
+
+            -- Insert account to workspace --
+			INSERT INTO public.ref_account_workspace(id_account, id_workspace, account_permission)
+				VALUES (cur_id_account, cur_id_workspace, arg_account_permission);
+
+            -- Create azure cloud container in DB --
+			INSERT INTO public.azure_cloud_container(workspace_id, cloud_container_name)
+				VALUES (cur_id_workspace, 'TEMP NULL NO AZURE');
+			tb_code := 0;
+		ELSE
+			tb_code := 170;
+		END IF;
+		RETURN NEXT;
+	END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.insert_account_to_workspace(
+	arg_account_id integer,
+	arg_invited_account_email TEXT,
+	arg_workspace_id_key TEXT,
+	arg_account_permission integer)
+    RETURNS integer
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+    /*
+     To Do
+     1. Check account's api key to verify license
+     */
+DECLARE
+    var_account_permission INTEGER;
+    var_invited_account_index INTEGER;
+	return_code INTEGER;
+    v_workspace_index INTEGER;
+BEGIN
+    v_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_workspace_id_key);
+    var_account_permission :=
+        (SELECT account_permission FROM public.ref_account_workspace
+            WHERE id_account = arg_account_id AND id_workspace = v_workspace_index);
+    IF var_account_permission = 1 THEN
+        var_invited_account_index :=
+            (SELECT id FROM public.account
+                WHERE account_id = arg_invited_account_email);
+
+        IF var_invited_account_index IS NOT NULL THEN   -- Has email in account table --
+            BEGIN
+                INSERT INTO public.ref_account_workspace
+                    VALUES(var_invited_account_index, v_workspace_index, arg_account_permission);
+
+                -- Plus the workspace personal --
+                UPDATE public.azure_cloud_container
+                    SET workspace_personnal = workspace_personnal + 1
+                    WHERE workspace_id = v_workspace_index;
+                EXCEPTION
+                    WHEN SQLSTATE '23503' THEN
+                        return_code := -100; -- No account_index or workspace_index in DB --
+                        RETURN return_code;
+                    WHEN SQLSTATE '23505' THEN
+                        return_code := -101; -- Duplicated account_index and workspace_index --
+                        RETURN return_code;
+            END;
+        ELSE
+            return_code := -103;    -- No email in account table --
+            RETURN return_code;
+        END IF;
+
+    ELSE
+        return_code := -102;    -- Permission denied --
+        RETURN return_code;
+    END IF;
+
+	return_code := 0;
+	RETURN return_code;
+END;
+$BODY$;
+
+---------------------------------------- Overload pending_member invitation -----------------------------------
+
+CREATE OR REPLACE FUNCTION public.insert_account_to_workspace(
+	arg_account_id integer,
+	arg_invited_account_email TEXT,
+	arg_workspace_id INTEGER,
+	arg_account_permission integer)
+    RETURNS integer
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+    /*
+     To Do
+     1. Check account's api key to verify license
+     */
+DECLARE
+    var_account_permission INTEGER;
+    var_invited_account_index INTEGER;
+	return_code INTEGER := 0;
+BEGIN
+    var_account_permission :=
+        (SELECT account_permission FROM public.ref_account_workspace
+            WHERE id_account = arg_account_id AND id_workspace = arg_workspace_id);
+    IF var_account_permission = 1 THEN
+        var_invited_account_index :=
+            (SELECT id FROM public.account
+                WHERE account_id = arg_invited_account_email);
+
+        IF var_invited_account_index IS NOT NULL THEN   -- Has email in account table --
+            BEGIN
+                INSERT INTO public.ref_account_workspace
+                    VALUES(var_invited_account_index, arg_workspace_id, arg_account_permission);
+
+                -- Plus the workspace personal --
+                UPDATE public.azure_cloud_container
+                    SET workspace_personnal = workspace_personnal + 1
+                    WHERE workspace_id = arg_workspace_id;
+                EXCEPTION
+                    WHEN SQLSTATE '23503' THEN
+                        return_code := -100; -- No account_index or workspace_index in DB --
+                        RETURN return_code;
+                    WHEN SQLSTATE '23505' THEN
+                        return_code := -101; -- Duplicated account_index and workspace_index --
+                        RETURN return_code;
+            END;
+        ELSE
+            return_code := -103;    -- No email in account table --
+        END IF;
+
+    ELSE
+        return_code := -102;    -- Permission denied --
+    END IF;
+
+	RETURN return_code;
+END;
+$BODY$;
+
+CREATE OR REPLACE FUNCTION public.delete_experiments(
+	arg_account_index INTEGER,
+	arg_workspace_index_key TEXT,
+	arg_experiment_indices_key TEXT[],
+	arg_project_index_key TEXT,
+	ignore_permission BOOLEAN)
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_container_name TEXT,
+        tb_cloud_path TEXT,
+        tb_experiment_name TEXT,
+        tb_project_id INTEGER)
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+    v_record RECORD;
+    v_container_name TEXT;
+    v_cloud_paths TEXT;
+    v_deleted_blob_sizes BIGINT := 0;
+    v_loop_counter INTEGER := 0;
+    check_query INTEGER;
+    v_workspace_index INTEGER;
+    v_experiment_indices BIGINT[];
+BEGIN
+    v_workspace_index :=
+        (SELECT id FROM public.workspace WHERE access_key = arg_workspace_index_key);
+
+    SELECT array_agg(id), array_agg(name) FROM public.experiment
+        WHERE access_key = ANY(arg_experiment_indices_key)
+        INTO v_experiment_indices, tb_experiment_name;
+
+    -- return project id to log activity --
+    SELECT id FROM public.project
+        WHERE access_key = arg_project_index_key
+        INTO tb_project_id;
+
+    ------------------------- Called from external function -------------------------
+    IF ignore_permission = FALSE THEN
+
+        -- Check has permission --
+        check_query :=
+            (SELECT experiment.id FROM public.experiment
+                INNER JOIN public.ref_account_project ON public.ref_account_project.id_project = public.experiment.belonged_project_id
+                WHERE public.experiment.id = ANY(v_experiment_indices) AND
+                      user_permission = 1 AND
+                      public.ref_account_project.id_account = arg_account_index
+                LIMIT 1);
+
+        IF check_query IS NOT NULL THEN
+
+            -- Get names to delete azure cloud blobs --
+            v_container_name :=
+                (SELECT cloud_container_name FROM public.azure_cloud_container
+                WHERE workspace_id = v_workspace_index);
+
+            -- Delete blob referencing deleted experiment --
+            FOR v_record IN
+                DELETE FROM public.azure_cloud_blob
+                    WHERE container_name = v_container_name AND
+                          belonged_experiment_id = ANY(v_experiment_indices)
+                    RETURNING cloud_path, blob_size
+            LOOP
+
+            IF v_loop_counter = 0 THEN
+                v_cloud_paths := v_record.cloud_path;
+            ELSE
+                v_cloud_paths := v_cloud_paths || ',' || v_record.cloud_path;
+            END IF;
+
+            v_deleted_blob_sizes := v_deleted_blob_sizes + v_record.blob_size;
+            v_loop_counter := v_loop_counter + 1;
+            END LOOP;
+
+            -- Update container left usage --
+            UPDATE public.azure_cloud_container
+                SET storage_usage = storage_usage - v_deleted_blob_sizes
+                WHERE cloud_container_name = v_container_name;
+
+            -- Finally delete experiment --
+            DELETE FROM public.experiment
+                WHERE id = ANY(v_experiment_indices);
+
+            -- Returning blob cloud paths to remove real blobs in azure cloud server --
+            tb_code := 0;
+            tb_cloud_path := v_cloud_paths;
+            tb_container_name := v_container_name;
+            RETURN NEXT;
+        ELSE
+            tb_code := -100;    -- Permission denied --
+            RETURN NEXT;
+        END IF;
+
+    ------------------------- Called from internal function -------------------------
+    ELSE
+
+         -- Get names to delete azure cloud blobs --
+        v_container_name :=
+            (SELECT cloud_container_name FROM public.azure_cloud_container
+            WHERE workspace_id = v_workspace_index);
+
+        -- Delete blob referencing deleted experiment --
+        FOR v_record IN
+            DELETE FROM public.azure_cloud_blob
+                WHERE container_name = v_container_name AND
+                      belonged_experiment_id = ANY(v_experiment_indices)
+                RETURNING cloud_path, blob_size
+        LOOP
+
+        IF v_loop_counter = 0 THEN
+            v_cloud_paths := v_record.cloud_path;
+        ELSE
+            v_cloud_paths := v_cloud_paths || ',' || v_record.cloud_path;
+        END IF;
+
+        v_deleted_blob_sizes := v_deleted_blob_sizes + v_record.blob_size;
+        v_loop_counter := v_loop_counter + 1;
+        END LOOP;
+
+        -- Update container left usage --
+        UPDATE public.azure_cloud_container
+            SET storage_usage = storage_usage - v_deleted_blob_sizes
+            WHERE cloud_container_name = v_container_name;
+
+        -- Finally delete experiment --
+        DELETE FROM public.experiment
+            WHERE id = ANY(v_experiment_indices);
+
+        -- Returning blob cloud paths to remove real blobs in azure cloud server --
+        tb_code := 0;
+        tb_cloud_path := v_cloud_paths;
+        tb_container_name := v_container_name;
+
+        RETURN NEXT;
+    END IF;
+END;
+$BODY$;
+
+CREATE OR REPLACE FUNCTION public.delete_project(
+	arg_account_index INTEGER,
+	arg_project_index_key TEXT,
+	ignore_permission BOOLEAN)
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_container_name TEXT,
+        tb_cloud_path TEXT,
+        tb_project_id INTEGER)
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+    v_record RECORD;
+    v_workspace_id INTEGER;
+    v_project_name TEXT;
+    v_project_index INTEGER;
+    v_container_name TEXT;
+    v_cloud_paths TEXT;
+    v_deleted_blob_sizes BIGINT := 0;
+    v_loop_counter INTEGER := 0;
+    check_query INTEGER;
+BEGIN
+    v_project_index :=
+        (SELECT id FROM public.project WHERE access_key = arg_project_index_key);
+    ------------------------- Called from external function -------------------------
+    IF ignore_permission = FALSE THEN
+
+        -- Check has permission --
+        check_query :=
+            (SELECT administrator_id FROM public.project
+                WHERE public.project.administrator_id = arg_account_index AND id = v_project_index);
+
+        IF check_query IS NOT NULL THEN
+
+            -- Release account from project --
+            DELETE FROM public.ref_account_project
+                WHERE id_project = v_project_index;
+
+            -- Delete Project --
+            DELETE FROM public.project
+                WHERE id = v_project_index
+                RETURNING belonged_workspace_id, name INTO v_workspace_id, v_project_name;
+
+            IF v_workspace_id IS NULL THEN
+                tb_code := -1;  -- No row deleted --
+                RETURN NEXT;
+            END IF;
+
+            v_container_name :=
+                (SELECT cloud_container_name FROM public.azure_cloud_container
+                    WHERE workspace_id = v_workspace_id);
+
+            -- Delete blob referencing deleted project --
+            FOR v_record IN
+                DELETE FROM public.azure_cloud_blob
+                    WHERE container_name = v_container_name AND cloud_path LIKE v_project_name || '%'
+                    RETURNING cloud_path, blob_size
+            LOOP
+
+            IF v_loop_counter = 0 THEN
+                v_cloud_paths := v_record.cloud_path;
+            ELSE
+                v_cloud_paths := v_cloud_paths || ',' || v_record.cloud_path;
+            END IF;
+
+            v_deleted_blob_sizes := v_deleted_blob_sizes + v_record.blob_size;
+            v_loop_counter := v_loop_counter + 1;
+            END LOOP;
+
+            -- Update container left usage --
+            UPDATE public.azure_cloud_container
+                SET storage_usage = storage_usage - v_deleted_blob_sizes
+                WHERE cloud_container_name = v_container_name;
+
+            -- Returning blob cloud paths to remove real blobs in azure cloud server --
+            tb_code := 0;
+            tb_cloud_path := v_cloud_paths;
+            tb_container_name := v_container_name;
+            tb_project_id := v_project_index;
+        ELSE
+            tb_code := -100;    -- Permission denied --
+        END IF;
+
+    ------------------------- Called from internal function -------------------------
+    ELSE
+
+        -- Release account from project --
+        DELETE FROM public.ref_account_project
+            WHERE id_project = v_project_index;
+
+        -- Delete Project --
+        DELETE FROM public.project
+            WHERE id = v_project_index
+            RETURNING belonged_workspace_id, name INTO v_workspace_id, v_project_name;
+
+        v_container_name :=
+            (SELECT cloud_container_name FROM public.azure_cloud_container
+                WHERE workspace_id = v_workspace_id);
+
+        -- Delete blob referencing deleted project --
+        FOR v_record IN
+            DELETE FROM public.azure_cloud_blob
+                WHERE container_name = v_container_name AND cloud_path LIKE quote_ident(v_project_name || '%')
+                RETURNING cloud_path, blob_size
+        LOOP
+
+        IF v_loop_counter = 0 THEN
+            v_cloud_paths := v_record.cloud_path;
+        ELSE
+            v_cloud_paths := v_cloud_paths || ',' || v_record.cloud_path;
+        END IF;
+
+        v_deleted_blob_sizes := v_deleted_blob_sizes + v_record.blob_size;
+        v_loop_counter := v_loop_counter + 1;
+        END LOOP;
+
+        -- Update container left usage --
+        UPDATE public.azure_cloud_container
+            SET storage_usage = storage_usage - v_deleted_blob_sizes
+            WHERE cloud_container_name = v_container_name;
+
+        -- Returning blob cloud paths to remove real blobs in azure cloud server --
+        tb_code := 0;
+        tb_cloud_path := v_cloud_paths;
+        tb_container_name := v_container_name;
+        tb_project_id := v_project_index;
+    END IF;
+
+    RETURN NEXT;
+END;
+$BODY$;
+
+CREATE OR REPLACE FUNCTION public.update_project_account_permission(
+	arg_account_index integer,
+	arg_project_index_key TEXT,
+	arg_alter_account_email text,
+	arg_alter_account_permission integer)
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_project_id INTEGER)
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+    v_project_index INTEGER;
+	v_user_permission INTEGER;
+	v_alter_account_index INTEGER;
+    v_administrator_id INTEGER;
+BEGIN
+    v_project_index :=
+        (SELECT id FROM public.project WHERE public.project.access_key = arg_project_index_key);
+
+	-- Check account's permission --
+	v_user_permission := (SELECT user_permission FROM public.ref_account_project
+						  	WHERE id_account = arg_account_index AND id_project = v_project_index);
+
+	-- Get account index by email --
+	BEGIN
+		v_alter_account_index := (SELECT * FROM public.get_account_index(arg_alter_account_email));
+		EXCEPTION
+			WHEN SQLSTATE 'P0001' THEN
+				tb_code := -102;
+				RETURN NEXT;
+	END;
+
+	IF v_user_permission = 1 THEN	-- Is Maintainer --
+
+		v_administrator_id :=
+			(SELECT administrator_id FROM public.project
+				INNER JOIN public.ref_account_project ON public.ref_account_project.id_project = public.project.id
+				WHERE public.ref_account_project.id_account = arg_account_index AND public.ref_account_project.id_project = v_project_index);
+
+		IF v_alter_account_index = v_administrator_id THEN
+			tb_code := -101;    -- Cannot change admin's permission --
+			RETURN NEXT;
+
+		ELSE
+            UPDATE public.ref_account_project
+                SET user_permission = arg_alter_account_permission
+                WHERE id_account = v_alter_account_index AND id_project = v_project_index;
+
+            tb_code := 0;
+            tb_project_id := v_project_index;
+            RETURN NEXT;
+        END IF;
+
+	ELSE
+		tb_code := -100;	-- Permission Denied --
+		RETURN NEXT;
+	END IF;
+END;
+$BODY$;
+
+CREATE OR REPLACE FUNCTION public.update_project_settings(
+	arg_account_index INTEGER,
+	arg_project_index_key TEXT,
+	arg_project_visibility INTEGER,
+	arg_project_name TEXT,
+	arg_project_description TEXT)
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_project_id INTEGER)
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+	v_user_permission INTEGER;
+    v_project_index INTEGER;
+    v_user_state INTEGER;
+	return_code INTEGER;
+BEGIN
+	-- Check account's permission --
+    SELECT user_permission, public.project.id FROM public.ref_account_project
+        INNER JOIN public.project ON public.project.id = public.ref_account_project.id_project
+        WHERE id_account = arg_account_index AND access_key = arg_project_index_key
+	    INTO v_user_permission, v_project_index;
+
+	IF v_user_permission = 1 THEN	-- Is Maintainer --
+
+        BEGIN
+            -- Update project settings --
+            UPDATE public.project
+                SET visibility = arg_project_visibility, name = arg_project_name, description = arg_project_description
+                WHERE public.project.id = v_project_index;
+
+            EXCEPTION
+                WHEN SQLSTATE '23505' THEN
+                    tb_code := 100;
+                    RETURN NEXT;
+        END;
+
+		CASE arg_project_visibility
+			WHEN 0 THEN
+			    v_user_state := 0;
+			WHEN 1 THEN
+			    v_user_state := 1;
+			ELSE
+			    tb_code := -101;    -- Invalid visibility parameter --
+			    RETURN NEXT;
+		END CASE;
+
+		-- Change user_state who already belonged to projects --
+		UPDATE public.ref_account_project
+			SET user_state = v_user_state
+			WHERE id_project = v_project_index;
+
+		return_code := 0;
+
+        tb_code = return_code;
+        tb_project_id = v_project_index;
+		RETURN NEXT;
+	ELSE
+		tb_code := -100;	-- Permission Denied --
+		RETURN NEXT;
+	END IF;
+END;
+$BODY$;
+
+CREATE OR REPLACE FUNCTION public.update_experiment_state(
+	arg_api_key CHARACTER,
+	arg_account_id CHARACTER,
+	arg_experiment_id CHARACTER,
+	arg_experiment_state INTEGER)
+    RETURNS INTEGER
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+	is_available boolean;
+BEGIN
+	is_available :=(SELECT * FROM public.is_available_apikey(arg_api_key,arg_account_id));
+	IF is_available IS TRUE THEN
+		UPDATE public.experiment SET experiment_state = arg_experiment_state WHERE access_key = arg_experiment_id;
+		RETURN 0;
+	ELSE
+		RETURN 125;
+	END IF;
+END;$BODY$;
+
+
+CREATE OR REPLACE FUNCTION public.update_experiment_finished_date(
+	arg_api_key CHARACTER,
+	arg_account_id CHARACTER,
+	arg_experiment_id CHARACTER,
+	arg_experiment_state INTEGER)
+
+    RETURNS TABLE(
+        tb_code INTEGER,
+        tb_project_name TEXT,
+        tb_project_id INTEGER,
+        tb_experiment_name TEXT,
+        tb_experiment_creator_id BIGINT)
+
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE
+
+AS $BODY$
+DECLARE
+	is_available boolean;
+    v_project_name TEXT;
+    v_project_id INTEGER;
+    v_experiment_name TEXT;
+    v_experiment_creator_id BIGINT;
+BEGIN
+	is_available :=(SELECT * FROM public.is_available_apikey(arg_api_key,arg_account_id));
+
+	IF is_available IS TRUE THEN
+        UPDATE public.experiment
+            SET experiment_state = arg_experiment_state
+            FROM public.account, public.project
+            WHERE experiment.access_key = arg_experiment_id
+            RETURNING project.name, experiment.belonged_project_id, experiment.name, account.id
+            INTO v_project_name, v_project_id, v_experiment_name, v_experiment_creator_id;
+
+		tb_code := 0;
+            IF v_project_name IS NOT NULL THEN
+                tb_project_name := v_project_name;
+                tb_project_id := v_project_id;
+                tb_experiment_name := v_experiment_name;
+                tb_experiment_creator_id := v_experiment_creator_id;
+
+            ELSE
+                tb_code := -201;
+            END IF;
+
+        RETURN NEXT;
+	ELSE
+	    tb_code := 125;
+		RETURN NEXT;
+	END IF;
+END;$BODY$;
