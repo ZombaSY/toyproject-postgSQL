@@ -5,7 +5,8 @@ CREATE OR REPLACE FUNCTION public.inviteproject(
 	arg_workspace_id_key TEXT)
     RETURNS TABLE(
         tb_code INTEGER,
-        tb_project_id INTEGER)
+        tb_project_id INTEGER,
+        tb_workspace_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -51,6 +52,7 @@ BEGIN
 
 		    tb_project_id := v_project_index;
 		    tb_code := 0;
+		    tb_workspace_id := v_workspace_index;
 		ELSE
 			tb_code := 510;
 		END IF;
@@ -65,3 +67,5 @@ BEGIN
 
     RETURN NEXT;
 END; $BODY$;
+
+DROP FUNCTION inviteproject(integer,text,text,text);

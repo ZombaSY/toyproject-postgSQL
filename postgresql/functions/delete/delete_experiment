@@ -9,7 +9,8 @@ CREATE OR REPLACE FUNCTION public.delete_experiments(
         tb_container_name TEXT,
         tb_cloud_path TEXT,
         tb_experiment_name TEXT,
-        tb_project_id INTEGER)
+        tb_project_id INTEGER,
+        tb_workspace_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -24,6 +25,7 @@ DECLARE
     v_loop_counter INTEGER := 0;
     check_query INTEGER;
     v_workspace_index INTEGER;
+    v_project_index INTEGER;
     v_experiment_indices BIGINT[];
 BEGIN
     v_workspace_index :=
@@ -36,7 +38,7 @@ BEGIN
     -- return project id to log activity --
     SELECT id FROM public.project
         WHERE access_key = arg_project_index_key
-        INTO tb_project_id;
+        INTO v_project_index;
 
     ------------------------- Called from external function -------------------------
     IF ignore_permission = FALSE THEN
@@ -88,6 +90,8 @@ BEGIN
             tb_code := 0;
             tb_cloud_path := v_cloud_paths;
             tb_container_name := v_container_name;
+            tb_project_id := v_project_index;
+            tb_workspace_id := v_workspace_index;
             RETURN NEXT;
         ELSE
             tb_code := -100;    -- Permission denied --
@@ -133,8 +137,12 @@ BEGIN
         tb_code := 0;
         tb_cloud_path := v_cloud_paths;
         tb_container_name := v_container_name;
+        tb_project_id := v_project_index;
+        tb_workspace_id := v_workspace_index;
 
         RETURN NEXT;
     END IF;
 END;
 $BODY$;
+
+DROP FUNCTION delete_experiments(integer,text,text[],text,boolean);

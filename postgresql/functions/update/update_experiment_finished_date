@@ -9,7 +9,8 @@ CREATE OR REPLACE FUNCTION public.update_experiment_finished_date(
         tb_project_name TEXT,
         tb_project_id INTEGER,
         tb_experiment_name TEXT,
-        tb_experiment_creator_id BIGINT)
+        tb_experiment_creator_id BIGINT,
+        tb_workspace_id INTEGER)
 
     LANGUAGE 'plpgsql'
 
@@ -21,18 +22,21 @@ DECLARE
 	is_available boolean;
     v_project_name TEXT;
     v_project_id INTEGER;
+    v_workspace_id INTEGER;
     v_experiment_name TEXT;
     v_experiment_creator_id BIGINT;
 BEGIN
 	is_available :=(SELECT * FROM public.is_available_apikey(arg_api_key,arg_account_id));
 
 	IF is_available IS TRUE THEN
+
         UPDATE public.experiment
             SET experiment_state = arg_experiment_state
-            FROM public.account, public.project
+            FROM experiment as ex
+            INNER JOIN public.account ON public.account.id = ex.creator
+            INNER JOIN public.project ON public.project.id = ex.belonged_project_id
             WHERE experiment.access_key = arg_experiment_id
-            RETURNING project.name, experiment.belonged_project_id, experiment.name, account.id
-            INTO v_project_name, v_project_id, v_experiment_name, v_experiment_creator_id;
+            RETURNING project.name, experiment.belonged_project_id, experiment.name, account.id, project.belonged_workspace_id;
 
 		tb_code := 0;
             IF v_project_name IS NOT NULL THEN
@@ -40,6 +44,7 @@ BEGIN
                 tb_project_id := v_project_id;
                 tb_experiment_name := v_experiment_name;
                 tb_experiment_creator_id := v_experiment_creator_id;
+                tb_workspace_id := v_workspace_id;
 
             ELSE
                 tb_code := -201;
@@ -51,18 +56,3 @@ BEGIN
 		RETURN NEXT;
 	END IF;
 END;$BODY$;
-
-UPDATE public.experiment
-    SET experiment_state = 0
-    FROM public.account, public.project
-    WHERE experiment.access_key = 'jibe7tn83erh1hqm'
-    RETURNING project.name, experiment.belonged_project_id, experiment.name, account.id;
-
-UPDATE public.experiment
-    SET experiment_state = 0
-    FROM public.account, public.project
-    WHERE experiment.access_key = 'jibe7tn83erh1hqm'
-    RETURNING *;
-
-SELECT * FROM public.experiment
-    ORDER BY id DESC;

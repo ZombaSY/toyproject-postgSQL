@@ -268,7 +268,8 @@ CREATE OR REPLACE FUNCTION public.inviteproject(
 	arg_workspace_id_key TEXT)
     RETURNS TABLE(
         tb_code INTEGER,
-        tb_project_id INTEGER)
+        tb_project_id INTEGER,
+        tb_workspace_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -314,6 +315,7 @@ BEGIN
 
 		    tb_project_id := v_project_index;
 		    tb_code := 0;
+		    tb_workspace_id := v_workspace_index;
 		ELSE
 			tb_code := 510;
 		END IF;
@@ -339,7 +341,8 @@ create or replace function createprojectsession(
     returns TABLE(
         tb_code integer,
         tb_project_key text,
-        tb_project_id INTEGER)
+        tb_project_id INTEGER,
+        tb_workspace_id INTEGER)
     language plpgsql
 as
 $$
@@ -387,6 +390,7 @@ BEGIN
 				tb_code := 0;
 			    tb_project_key := v_random_string;
 			    tb_project_id := cur_project_id;
+			    tb_workspace_id := v_workspace_index;
 
 				RETURN NEXT;
 
@@ -773,7 +777,8 @@ CREATE OR REPLACE FUNCTION public.delete_experiments(
         tb_container_name TEXT,
         tb_cloud_path TEXT,
         tb_experiment_name TEXT,
-        tb_project_id INTEGER)
+        tb_project_id INTEGER,
+        tb_workspace_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -788,6 +793,7 @@ DECLARE
     v_loop_counter INTEGER := 0;
     check_query INTEGER;
     v_workspace_index INTEGER;
+    v_project_index INTEGER;
     v_experiment_indices BIGINT[];
 BEGIN
     v_workspace_index :=
@@ -800,7 +806,7 @@ BEGIN
     -- return project id to log activity --
     SELECT id FROM public.project
         WHERE access_key = arg_project_index_key
-        INTO tb_project_id;
+        INTO v_project_index;
 
     ------------------------- Called from external function -------------------------
     IF ignore_permission = FALSE THEN
@@ -852,6 +858,8 @@ BEGIN
             tb_code := 0;
             tb_cloud_path := v_cloud_paths;
             tb_container_name := v_container_name;
+            tb_project_id := v_project_index;
+            tb_workspace_id := v_workspace_index;
             RETURN NEXT;
         ELSE
             tb_code := -100;    -- Permission denied --
@@ -897,6 +905,8 @@ BEGIN
         tb_code := 0;
         tb_cloud_path := v_cloud_paths;
         tb_container_name := v_container_name;
+        tb_project_id := v_project_index;
+        tb_workspace_id := v_workspace_index;
 
         RETURN NEXT;
     END IF;
@@ -911,7 +921,8 @@ CREATE OR REPLACE FUNCTION public.delete_project(
         tb_code INTEGER,
         tb_container_name TEXT,
         tb_cloud_path TEXT,
-        tb_project_id INTEGER)
+        tb_project_id INTEGER,
+        tb_workspace_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -986,6 +997,7 @@ BEGIN
             tb_cloud_path := v_cloud_paths;
             tb_container_name := v_container_name;
             tb_project_id := v_project_index;
+            tb_workspace_id := v_workspace_id;
         ELSE
             tb_code := -100;    -- Permission denied --
         END IF;
@@ -1033,6 +1045,8 @@ BEGIN
         tb_cloud_path := v_cloud_paths;
         tb_container_name := v_container_name;
         tb_project_id := v_project_index;
+        tb_workspace_id := v_workspace_id;
+
     END IF;
 
     RETURN NEXT;
@@ -1046,7 +1060,8 @@ CREATE OR REPLACE FUNCTION public.update_project_account_permission(
 	arg_alter_account_permission integer)
     RETURNS TABLE(
         tb_code INTEGER,
-        tb_project_id INTEGER)
+        tb_project_id INTEGER,
+        tb_workspace_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -1055,6 +1070,7 @@ CREATE OR REPLACE FUNCTION public.update_project_account_permission(
 AS $BODY$
 DECLARE
     v_project_index INTEGER;
+    v_workspace_index INTEGER;
 	v_user_permission INTEGER;
 	v_alter_account_index INTEGER;
     v_administrator_id INTEGER;
@@ -1077,10 +1093,11 @@ BEGIN
 
 	IF v_user_permission = 1 THEN	-- Is Maintainer --
 
-		v_administrator_id :=
-			(SELECT administrator_id FROM public.project
-				INNER JOIN public.ref_account_project ON public.ref_account_project.id_project = public.project.id
-				WHERE public.ref_account_project.id_account = arg_account_index AND public.ref_account_project.id_project = v_project_index);
+		SELECT administrator_id, belonged_workspace_id FROM public.project
+            INNER JOIN public.ref_account_project ON public.ref_account_project.id_project = public.project.id
+            WHERE public.ref_account_project.id_account = arg_account_index AND
+                  public.ref_account_project.id_project = v_project_index
+            INTO v_administrator_id, v_workspace_index;
 
 		IF v_alter_account_index = v_administrator_id THEN
 			tb_code := -101;    -- Cannot change admin's permission --
@@ -1093,6 +1110,7 @@ BEGIN
 
             tb_code := 0;
             tb_project_id := v_project_index;
+            tb_workspace_id := v_workspace_index;
             RETURN NEXT;
         END IF;
 
@@ -1111,7 +1129,8 @@ CREATE OR REPLACE FUNCTION public.update_project_settings(
 	arg_project_description TEXT)
     RETURNS TABLE(
         tb_code INTEGER,
-        tb_project_id INTEGER)
+        tb_project_id INTEGER,
+        tb_workspace_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -1121,6 +1140,7 @@ AS $BODY$
 DECLARE
 	v_user_permission INTEGER;
     v_project_index INTEGER;
+    v_workspace_index INTEGER;
     v_user_state INTEGER;
 	return_code INTEGER;
 BEGIN
@@ -1136,7 +1156,8 @@ BEGIN
             -- Update project settings --
             UPDATE public.project
                 SET visibility = arg_project_visibility, name = arg_project_name, description = arg_project_description
-                WHERE public.project.id = v_project_index;
+                WHERE public.project.id = v_project_index
+                RETURNING belonged_workspace_id INTO v_workspace_index;
 
             EXCEPTION
                 WHEN SQLSTATE '23505' THEN
@@ -1163,6 +1184,7 @@ BEGIN
 
         tb_code = return_code;
         tb_project_id = v_project_index;
+        tb_workspace_id = v_workspace_index;
 		RETURN NEXT;
 	ELSE
 		tb_code := -100;	-- Permission Denied --
@@ -1207,7 +1229,8 @@ CREATE OR REPLACE FUNCTION public.update_experiment_finished_date(
         tb_project_name TEXT,
         tb_project_id INTEGER,
         tb_experiment_name TEXT,
-        tb_experiment_creator_id BIGINT)
+        tb_experiment_creator_id BIGINT,
+        tb_workspace_id INTEGER)
 
     LANGUAGE 'plpgsql'
 
@@ -1219,6 +1242,7 @@ DECLARE
 	is_available boolean;
     v_project_name TEXT;
     v_project_id INTEGER;
+    v_workspace_id INTEGER;
     v_experiment_name TEXT;
     v_experiment_creator_id BIGINT;
 BEGIN
@@ -1229,8 +1253,8 @@ BEGIN
             SET experiment_state = arg_experiment_state
             FROM public.account, public.project
             WHERE experiment.access_key = arg_experiment_id
-            RETURNING project.name, experiment.belonged_project_id, experiment.name, account.id
-            INTO v_project_name, v_project_id, v_experiment_name, v_experiment_creator_id;
+            RETURNING project.name, experiment.belonged_project_id, experiment.name, account.id, project.belonged_workspace_id
+            INTO v_project_name, v_project_id, v_experiment_name, v_experiment_creator_id, v_workspace_id;
 
 		tb_code := 0;
             IF v_project_name IS NOT NULL THEN
@@ -1238,6 +1262,7 @@ BEGIN
                 tb_project_id := v_project_id;
                 tb_experiment_name := v_experiment_name;
                 tb_experiment_creator_id := v_experiment_creator_id;
+                tb_workspace_id := v_workspace_id;
 
             ELSE
                 tb_code := -201;

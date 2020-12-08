@@ -6,7 +6,8 @@ CREATE OR REPLACE FUNCTION public.delete_project(
         tb_code INTEGER,
         tb_container_name TEXT,
         tb_cloud_path TEXT,
-        tb_project_id INTEGER)
+        tb_project_id INTEGER,
+        tb_workspace_id INTEGER)
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -81,6 +82,7 @@ BEGIN
             tb_cloud_path := v_cloud_paths;
             tb_container_name := v_container_name;
             tb_project_id := v_project_index;
+            tb_workspace_id := v_workspace_id;
         ELSE
             tb_code := -100;    -- Permission denied --
         END IF;
@@ -128,8 +130,12 @@ BEGIN
         tb_cloud_path := v_cloud_paths;
         tb_container_name := v_container_name;
         tb_project_id := v_project_index;
+        tb_workspace_id := v_workspace_id;
+
     END IF;
 
     RETURN NEXT;
 END;
 $BODY$;
+
+DROP FUNCTION delete_project(integer,text,boolean)
