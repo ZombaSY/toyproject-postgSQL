@@ -41,7 +41,7 @@ BEGIN
     IF tb_workspace_key IS NOT NULL THEN
         tb_code := 0;
     ELSE
-        tb_code := -400;    -- any keys are not found
+        tb_code := -400;    -- no key found
     END IF;
 
     RETURN NEXT;

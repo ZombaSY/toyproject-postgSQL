@@ -8,12 +8,15 @@ CREATE OR REPLACE FUNCTION createexperiment(
         experiment_id_key CHARACTER,
         project_id_key TEXT,
         workspace_id_key TEXT,
+        workspace_id TEXT,
         project_id INTEGER,
         account_id INTEGER)
     LANGUAGE plpgsql
 as
 $$
 DECLARE
+    v_workspace_id_key TEXT;
+    v_workspace_id INTEGER;
 	var_project_id INTEGER;
     var_project_access_key TEXT;
 	temp_experiment_id INTEGER;
@@ -25,7 +28,8 @@ BEGIN
 	SELECT DISTINCT public.project.id,
                     public.account.id,
                     public.project.access_key,
-	                public.workspace.access_key
+	                public.workspace.access_key,
+	                public.workspace.id
                         FROM public.account
 		LEFT JOIN public.api_key ON public.api_key.account_id = public.account.account_id
 		LEFT JOIN public.workspace ON public.workspace.name = arg_workspace_name
@@ -33,7 +37,7 @@ BEGIN
 		WHERE public.api_key.api_key = arg_api_key AND
 		      public.project.name = arg_project_name AND
 		      public.account.account_id = arg_account_id
-	    INTO var_project_id, var_account_index, var_project_access_key, workspace_id_key;
+	    INTO var_project_id, var_account_index, var_project_access_key, v_workspace_id_key, v_workspace_id;
 
 
 	IF var_project_id IS NULL THEN
@@ -69,6 +73,8 @@ BEGIN
 		experiment_id_key := v_random_string;
 	    project_id := var_project_id;
 	    account_id := var_account_index;
+	    workspace_id_key := v_workspace_id_key;
+	    workspace_id := v_workspace_id;
 
 		RETURN NEXT;
 	END IF;
@@ -89,12 +95,15 @@ create function createexperiment(
         experiment_id_key CHARACTER,
         project_id_key TEXT,
         workspace_id_key TEXT,
+        workspace_id INTEGER,
         project_id INTEGER,
         account_id INTEGER)
     language plpgsql
 as
 $$
 DECLARE
+    v_workspace_id_key TEXT;
+    v_workspace_id INTEGER;
 	var_project_id INTEGER;
     var_project_access_key TEXT;
 	temp_experiment_id INTEGER;
@@ -114,7 +123,7 @@ BEGIN
 		WHERE public.api_key.api_key = arg_api_key AND
 		      public.project.name = arg_project_name AND
 		      public.account.account_id = arg_account_id
-	    INTO var_project_id, var_account_index, var_project_access_key, workspace_id_key;
+	    INTO var_project_id, var_account_index, var_project_access_key, v_workspace_id_key, v_workspace_id;
 
 
 	IF var_project_id IS NULL THEN
@@ -147,6 +156,8 @@ BEGIN
 		experiment_id_key := v_random_string;
 	    project_id := var_project_id;
 	    account_id := var_account_index;
+	    workspace_id_key := v_workspace_id_key;
+	    workspace_id := v_workspace_id;
 
 		RETURN NEXT;
 	END IF;
